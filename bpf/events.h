@@ -2,38 +2,41 @@
 #define __EVENT_H__
 #include <linux/ptrace.h>
 
-enum event_type_t
-{
-    EVENT_MALLOC,
-    EVENT_FREE,
-};
-
-struct event_t
-{
-    __u32 pid;
-    enum event_type_t type;
-    __u32 _pad;
-    union
-    {
-        __u64 size;
-        __u64 ptr;
-    };
-};
-
 struct alloc_info_t
 {
     __u64 size;
     __u64 timestamp_ns;
 };
 
-// Hash map: key = malloc ptr, value = alloc_info
+struct memleak_event_t
+{
+    __u32 pid;
+    __u64 unfreed_bytes;
+};
+
 struct
 {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, __u64);
+    __uint(max_entries, 10240);
+    __type(key, __u32);   // TID
+    __type(value, __u64); // size param
+} tmp_alloc_size SEC(".maps");
+
+struct
+{
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 10240);
+    __type(key, __u64); // ptr
     __type(value, struct alloc_info_t);
-    __uint(max_entries, 100000);
 } allocs SEC(".maps");
+
+struct
+{
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 4096);
+    __type(key, __u32);   // PID
+    __type(value, __u64); // unfreed total bytes
+} unfreed_bytes SEC(".maps");
 
 struct
 {

@@ -14,39 +14,53 @@ int trace_malloc_enter(struct pt_regs *ctx)
 {
     __u64 size = PT_REGS_PARM1(ctx);
     __u64 tid = bpf_get_current_pid_tgid();
-    bpf_map_update_elem(&temp_size, &tid, &size, BPF_ANY);
-    bpf_printk("malloc: tid=%llu size=%llu", tid, size);
+    bpf_map_update_elem(&tmp_alloc_size, &tid, &size, BPF_ANY);
+    // bpf_printk("malloc: tid=%llu size=%llu", tid, size);
     return 0;
 }
 
 SEC("uretprobe/malloc")
-int trace_malloc_ret(struct pt_regs *ctx)
+int malloc_return(struct pt_regs *ctx)
 {
-    __u64 tid = bpf_get_current_pid_tgid();
-    __u64 *size_ptr = bpf_map_lookup_elem(&temp_size, &tid);
-    if (!size_ptr)
-        return 0;
-
     __u64 ptr = PT_REGS_RC(ctx);
-    bpf_map_delete_elem(&temp_size, &tid);
+    __u64 pid_tgid = bpf_get_current_pid_tgid();
+    __u32 pid = pid_tgid >> 32;
+    __u32 tid = (__u32)pid_tgid;
 
-    if (ptr == 0)
+    __u64 *size = bpf_map_lookup_elem(&tmp_alloc_size, &tid);
+    if (!size || ptr == 0)
+    {
+        bpf_printk("malloc tmp_alloc_size: pid=%d tid=%d ptr=0x%llx size=%llu not found", pid, tid, ptr, size ? *size : 0);
         return 0;
-
+    }
     struct alloc_info_t info = {
-        .size = *size_ptr,
+        .size = *size,
         .timestamp_ns = bpf_ktime_get_ns(),
     };
     bpf_map_update_elem(&allocs, &ptr, &info, BPF_ANY);
+    bpf_map_delete_elem(&tmp_alloc_size, &tid);
 
-    struct event_t *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+    __u64 zero = 0;
+    __u64 *total = bpf_map_lookup_elem(&unfreed_bytes, &pid);
+    if (!total)
+    {
+        // initialize first
+        bpf_map_update_elem(&unfreed_bytes, &pid, &zero, BPF_ANY);
+        total = bpf_map_lookup_elem(&unfreed_bytes, &pid);
+        if (!total)
+            return 0;
+    }
+
+    __sync_fetch_and_add(total, *size);
+    struct memleak_event_t *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (!e)
         return 0;
-    bpf_printk("malloc ret: tid=%llu ptr=0x%llx size=%llu", tid, ptr, *size_ptr);
-    e->pid = tid >> 32;
-    e->type = EVENT_MALLOC;
-    e->size = *size_ptr;
+
+    e->pid = pid;
+    e->unfreed_bytes = *total;
+
     bpf_ringbuf_submit(e, 0);
+    bpf_printk("malloc: pid=%d ptr=0x%llx size+=%llu total_size=%llu", pid, ptr, *size, *total);
     return 0;
 }
 
@@ -54,18 +68,34 @@ SEC("uprobe/free")
 int trace_free(struct pt_regs *ctx)
 {
     __u64 ptr = PT_REGS_PARM1(ctx);
-    if (ptr == 0)
-        return 0;
+    __u64 pid_tgid = bpf_get_current_pid_tgid();
+    __u32 pid = pid_tgid >> 32;
 
+    struct alloc_info_t *info = bpf_map_lookup_elem(&allocs, &ptr);
+    if (!info)
+    {
+        bpf_printk("free: pid=%d ptr=0x%llx not found", pid, ptr);
+        return 0;
+    }
+
+    __u64 size = info->size;
     bpf_map_delete_elem(&allocs, &ptr);
-    struct event_t *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+
+    __u64 *total = bpf_map_lookup_elem(&unfreed_bytes, &pid);
+    __u64 total_val = 0;
+    if (total)
+    {
+        __sync_fetch_and_sub(total, size);
+        total_val = *total;
+    }
+    bpf_printk("free success: pid=%d ptr=0x%llx size-=%llu total_size=%llu", pid, ptr, size, total_val);
+    struct memleak_event_t *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
     if (!e)
         return 0;
-    bpf_printk("free: ptr=0x%llx", ptr);
-    __u32 pid = bpf_get_current_pid_tgid() >> 32;
+
     e->pid = pid;
-    e->type = EVENT_FREE;
-    e->ptr = ptr;
+    e->unfreed_bytes = total_val;
+
     bpf_ringbuf_submit(e, 0);
     return 0;
 }

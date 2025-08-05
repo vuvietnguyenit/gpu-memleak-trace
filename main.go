@@ -56,7 +56,7 @@ func main() {
 	}
 	defer mallocSym.Close()
 
-	mallocRetSym, err := ex.Uretprobe("malloc", objs.TraceMallocRet, nil)
+	mallocRetSym, err := ex.Uretprobe("malloc", objs.MallocReturn, nil)
 	if err != nil {
 		log.Fatalf("attach malloc exit: %v", err)
 	}
