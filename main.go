@@ -87,7 +87,7 @@ func main() {
 
 			var event Event
 			if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &event); err != nil {
-				log.Printf("failed to decode event: %v", err)
+				// log.Printf("failed to decode event: %v", err)
 				continue
 			}
 			// switch event.Type {

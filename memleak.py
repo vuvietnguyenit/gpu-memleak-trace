@@ -1,37 +1,48 @@
+import ctypes
 import random
 import time
+import os
 
-allocated = []
+libc = ctypes.CDLL("libc.so.6")
+
+# Correct return type for malloc: void*
+libc.malloc.restype = ctypes.c_void_p
+libc.free.argtypes = [ctypes.c_void_p]
+
+allocated = {}
 
 def allocate_memory():
-    # Allocate a random size between 1KB and 1MB
-    size_kb = random.randint(1, 1024)
-    block = bytearray(size_kb * 1024)
-    allocated.append(block)
-    print(f"[+] Allocated {size_kb} KB (total blocks: {len(allocated)})")
+    size = random.randint(1, 1024 * 1024)
+    ptr = libc.malloc(size)
+    if not ptr:
+        print("malloc failed")
+        return
+    allocated[ptr] = size
+    print(f"[+] malloc: ptr=0x{ptr:x} size={size} bytes (total: {len(allocated)})")
+    return ptr
 
 def free_memory():
-    if allocated:
-        idx = random.randint(0, len(allocated) - 1)
-        del allocated[idx]
-        print(f"[-] Freed block at index {idx} (remaining blocks: {len(allocated)})")
-    else:
-        print("[!] No memory to free")
+    if not allocated:
+        print("[!] No allocations to free")
+        return
+    ptr = random.choice(list(allocated.keys()))
+    libc.free(ptr)
+    del allocated[ptr]
+    print(f"[-] free: ptr=0x{ptr:x} (remaining: {len(allocated)})")
 
 def main():
+    print(f"{os.getpid()} - Memory Leak Simulation Started")
     try:
         while True:
-            action = random.choice(['alloc', 'free'])
-            if action == 'alloc':
+            if random.choice(["alloc", "free"]) == "alloc":
                 allocate_memory()
             else:
                 free_memory()
-
-            sleep_time = random.uniform(0.1, 1.0)  # sleep between 100ms to 1s
-            time.sleep(sleep_time)
-
+            time.sleep(random.uniform(3, 4.5))
     except KeyboardInterrupt:
-        print("\n[!] Exiting and freeing all memory.")
+        print("Exiting, cleaning up...")
+        for ptr in allocated:
+            libc.free(ptr)
         allocated.clear()
 
 if __name__ == "__main__":

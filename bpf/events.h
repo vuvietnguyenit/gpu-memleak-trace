@@ -25,7 +25,7 @@ struct
 struct
 {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 10240);
+    __uint(max_entries, 1000000);
     __type(key, __u64); // ptr
     __type(value, struct alloc_info_t);
 } allocs SEC(".maps");
@@ -33,7 +33,7 @@ struct
 struct
 {
     __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 4096);
+    __uint(max_entries, 409600);
     __type(key, __u32);   // PID
     __type(value, __u64); // unfreed total bytes
 } unfreed_bytes SEC(".maps");
@@ -43,14 +43,5 @@ struct
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 24); // 16 MB
 } events SEC(".maps");
-
-// Save malloc size before return (per-TID)
-struct
-{
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, __u64);   // tid
-    __type(value, __u64); // size
-    __uint(max_entries, 1024);
-} temp_size SEC(".maps");
 
 #endif /* __EVENT_H__ */
