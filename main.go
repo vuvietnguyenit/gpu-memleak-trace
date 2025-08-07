@@ -14,33 +14,13 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -cc clang -cflags "-g -O2 -D__TARGET_ARCH_x86" MemtraceProg bpf/memtrace.bpf.c -- -I../headers
-
-const (
-	LIBC_PATH = "/usr/lib/x86_64-linux-gnu/libc.so.6"
-)
-
-type EventType uint32
-
-const (
-	EventMalloc EventType = 0
-	EventFree   EventType = 1
-)
-
-type Event struct {
-	Pid  uint32
-	Type EventType
-	_    [4]byte // padding
-	Data uint64  // union: either size or ptr
-}
-
 func main() {
 	if err := rlimit.RemoveMemlock(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("failed to remove memlock: %v", err)
 	}
 
-	var objs MemtraceProgObjects
-	if err := LoadMemtraceProgObjects(&objs, nil); err != nil {
+	var objs MemleakCountAllocObjects
+	if err := LoadMemleakCountAllocObjects(&objs, nil); err != nil {
 		log.Fatalf("loading objects: %v", err)
 	}
 	defer objs.Close()
@@ -50,13 +30,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("opening executable: %s", err)
 	}
-	mallocSym, err := ex.Uprobe("malloc", objs.TraceMallocEnter, nil)
+
+	mallocSym, err := ex.Uprobe("malloc", objs.TraceMallocEntry, nil)
 	if err != nil {
 		log.Fatalf("attach malloc enter: %v", err)
 	}
 	defer mallocSym.Close()
 
-	mallocRetSym, err := ex.Uretprobe("malloc", objs.MallocReturn, nil)
+	mallocRetSym, err := ex.Uretprobe("malloc", objs.TraceMallocReturn, nil)
 	if err != nil {
 		log.Fatalf("attach malloc exit: %v", err)
 	}
@@ -77,7 +58,6 @@ func main() {
 	// Channel to handle Ctrl+C
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
-
 	go func() {
 		for {
 			record, err := rd.Read()
@@ -90,6 +70,7 @@ func main() {
 				// log.Printf("failed to decode event: %v", err)
 				continue
 			}
+			fmt.Printf("Raw sample: %x\n", record.RawSample)
 			// switch event.Type {
 			// case EventMalloc:
 			// 	fmt.Printf("[malloc] pid=%d size=%d\n", event.Pid, event.Data)
@@ -97,6 +78,7 @@ func main() {
 			// 	// fmt.Printf("[free]   pid=%d ptr=0x%x\n", event.Pid, event.Data)
 			// }
 		}
+
 	}()
 
 	<-stop
