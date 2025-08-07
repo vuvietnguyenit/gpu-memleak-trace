@@ -1,0 +1,34 @@
+BEGIN
+{
+    printf("Starting CUDA memory trace...\n");
+}
+
+END
+{
+    printf("Stopping CUDA memory trace.\n");
+}
+
+// cuMemAlloc(CUdeviceptr *dptr, size_t bytesize)
+
+uprobe:/usr/lib/x86_64-linux-gnu/libcuda.so:cuMemAlloc*
+{
+    printf(
+        "cuMemAlloc ENTRY: pid=%d, dptr_ptr=0x%lx, size=%lu\n",
+        pid, arg0, arg1
+    );
+
+    // Save dptr address to map for later use in return probe
+    @dptr_ptr[tid] = arg0;
+    @size[tid] = arg1;
+}
+
+uretprobe:/usr/lib/x86_64-linux-gnu/libcuda.so:cuMemAlloc*
+{
+    printf("cuMemAlloc RETURN: pid=%d, retval=%d\n", pid, retval);
+}
+
+
+uprobe:/usr/lib/x86_64-linux-gnu/libcuda.so:cuMemFree*
+{
+    printf("cuMemFree: dptr=0x%lx\n", arg0);
+}
