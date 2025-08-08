@@ -25,3 +25,4 @@ bin/
 *_bpfeb.go
 *_bpfel.go
 *.o
+tmp/
