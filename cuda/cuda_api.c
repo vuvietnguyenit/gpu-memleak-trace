@@ -1,10 +1,8 @@
-// cuda_api.cu
 #include <cuda_runtime.h>
 #include <string.h>
 
-extern "C" int getDeviceName(int deviceID, char *nameBuffer,
-                             size_t bufferSize) {
-  struct cudaDeviceProp prop; // Use struct for C compatibility
+int get_device_name(int deviceID, char *nameBuffer, size_t bufferSize) {
+  struct cudaDeviceProp prop;
   cudaError_t err = cudaGetDeviceProperties(&prop, deviceID);
   if (err != cudaSuccess) {
     return (int)err;
@@ -14,7 +12,7 @@ extern "C" int getDeviceName(int deviceID, char *nameBuffer,
   return 0; // success
 }
 
-extern "C" const char *checkCuda(cudaError_t err) {
+const char *check_cuda(cudaError_t err) {
   if (err != cudaSuccess) {
     return cudaGetErrorString(err);
   }

@@ -3,7 +3,7 @@ package cuda
 /*
 #cgo LDFLAGS: -L. -lgpudevice -lcudart -Wl,-rpath=.
 #include <cuda_runtime.h>
-char* checkCuda(cudaError_t err);
+extern char* check_cuda(cudaError_t err);
 */
 import "C"
 import (
@@ -13,7 +13,7 @@ import (
 
 func RealCudaGetDeviceCount(count *int) error {
 	var cCount C.int
-	errStr := C.checkCuda(C.cudaGetDeviceCount(&cCount))
+	errStr := C.check_cuda(C.cudaGetDeviceCount(&cCount))
 	if errStr != nil {
 		return fmt.Errorf("cuda get device count error: %s", C.GoString(errStr))
 	}
@@ -22,7 +22,7 @@ func RealCudaGetDeviceCount(count *int) error {
 }
 
 func SetCudaDevice(deviceID int) error {
-	errStr := C.checkCuda(C.cudaSetDevice(C.int(deviceID)))
+	errStr := C.check_cuda(C.cudaSetDevice(C.int(deviceID)))
 	if errStr != nil {
 		return fmt.Errorf("cudaSetDevice failed: %s", C.GoString(errStr))
 	}
@@ -37,7 +37,7 @@ func CudaGetMemInfo(deviceID int) (*MemInfo, error) {
 	var free C.size_t
 	var total C.size_t
 
-	errStr := C.checkCuda(C.cudaMemGetInfo(&free, &total))
+	errStr := C.check_cuda(C.cudaMemGetInfo(&free, &total))
 	if errStr != nil {
 		return nil, fmt.Errorf("cudaMemGetInfo failed: %s", C.GoString(errStr))
 	}

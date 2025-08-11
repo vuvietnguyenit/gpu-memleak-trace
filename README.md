@@ -4,5 +4,7 @@
 
 ```sh
 # cd cuda/
-# nvcc -Xcompiler -fPIC -shared cuda_api.cu -o libgpudevice.so
+# gcc -fPIC -shared cuda_api.c -o libgpudevice.so
+# cd nvlm/
+# gcc -fPIC -shared nvlm_api.c -o libnvlmstats.so
 ```
