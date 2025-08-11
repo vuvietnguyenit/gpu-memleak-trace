@@ -39,3 +39,26 @@ nvmlUtilization_t get_gpu_utilization_rate(int device_index, int *err) {
   nvmlShutdown();
   return util;
 }
+
+unsigned int get_gpu_temperature(int device_index, int *err) {
+  unsigned int temp = 0;
+
+  nvmlReturn_t result;
+  nvmlDevice_t device;
+  result = nvmlDeviceGetHandleByIndex(device_index, &device);
+  if (result != NVML_SUCCESS) {
+    *err = result;
+    nvmlShutdown();
+    return temp;
+  }
+
+  result = nvmlDeviceGetTemperature(device, NVML_TEMPERATURE_GPU, &temp);
+  if (result != NVML_SUCCESS) {
+    *err = result;
+  } else {
+    *err = 0;
+  }
+
+  nvmlShutdown();
+  return temp;
+}
