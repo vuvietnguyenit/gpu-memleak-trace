@@ -6,10 +6,11 @@ import (
 )
 
 func TestInitNVLM(t *testing.T) {
-	err := nvlmapi.InitNVLM()
+	_, err := nvlmapi.GetDriverVersion()
 	if err != nil {
 		t.Fatalf("Failed to initialize NVLM API: %v", err)
 	}
+	defer nvlmapi.ShutdownNVLM()
 
 	t.Log("NVLM API initialized successfully")
 }

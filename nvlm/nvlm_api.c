@@ -1,6 +1,14 @@
 
 #include "nvml.h"
 
+nvmlReturn_t nvml_shutdown() {
+  nvmlReturn_t result = nvmlShutdown();
+  if (result != NVML_SUCCESS) {
+    return result;
+  }
+  return NVML_SUCCESS;
+}
+
 const char *get_driver_version() {
   static char version[80];
   nvmlReturn_t result = nvmlInit();
@@ -61,4 +69,50 @@ unsigned int get_gpu_temperature(int device_index, int *err) {
 
   nvmlShutdown();
   return temp;
+}
+
+unsigned int get_power_usage(int device_index, int *err) {
+  unsigned int power = 0;
+
+  nvmlReturn_t result;
+  nvmlDevice_t device;
+  result = nvmlDeviceGetHandleByIndex(device_index, &device);
+  if (result != NVML_SUCCESS) {
+    *err = result;
+    nvmlShutdown();
+    return power;
+  }
+
+  result = nvmlDeviceGetPowerUsage(device, &power);
+  if (result != NVML_SUCCESS) {
+    *err = result;
+  } else {
+    *err = 0;
+  }
+
+  nvmlShutdown();
+  return power;
+}
+
+unsigned int get_fan_speed(int device_index, int *err) {
+  unsigned int speed = 0;
+
+  nvmlReturn_t result;
+  nvmlDevice_t device;
+  result = nvmlDeviceGetHandleByIndex(device_index, &device);
+  if (result != NVML_SUCCESS) {
+    *err = result;
+    nvmlShutdown();
+    return speed;
+  }
+
+  result = nvmlDeviceGetFanSpeed(device, &speed);
+  if (result != NVML_SUCCESS) {
+    *err = result;
+  } else {
+    *err = 0;
+  }
+
+  nvmlShutdown();
+  return speed;
 }

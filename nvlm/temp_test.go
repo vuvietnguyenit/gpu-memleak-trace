@@ -7,7 +7,7 @@ import (
 
 func TestGetGPUTemperature(t *testing.T) {
 	// Initialize NVLM
-	err := nvlm.InitNVLM()
+	_, err := nvlm.GetDriverVersion()
 	if err != nil {
 		t.Fatalf("Failed to initialize NVLM API: %v", err)
 	}
