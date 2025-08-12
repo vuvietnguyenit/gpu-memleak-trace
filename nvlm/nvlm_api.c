@@ -116,3 +116,12 @@ unsigned int get_fan_speed(int device_index, int *err) {
   nvmlShutdown();
   return speed;
 }
+
+nvmlReturn_t get_clocks_info(unsigned int index, nvmlClockType_t clockType,
+                             unsigned int *clock) {
+  nvmlDevice_t device;
+  if (nvmlDeviceGetHandleByIndex(index, &device) != NVML_SUCCESS) {
+    return NVML_ERROR_UNKNOWN;
+  }
+  return nvmlDeviceGetClockInfo(device, clockType, clock);
+}
