@@ -77,7 +77,7 @@ func (a *AllocMap) Snapshot() map[uint32]map[uint64]uint64 {
 
 func (a *AllocMap) CleanupExited() {
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Second)
 		slog.Debug("Checking for exited PIDs...", "data", a.String())
 		a.mu.Lock()
 		for pid := range a.data {
@@ -115,7 +115,7 @@ func humanSize(bytes int64) string {
 }
 
 func (a *AllocMap) printAllocMapPeriodically() {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(FlagPrintInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {

@@ -16,9 +16,6 @@ import (
 )
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -target amd64 bpf ebpf/cuda_memleak_detection.bpf.c -- -I../headers
-const (
-	LIBCUDA_PATH = "/usr/lib/x86_64-linux-gnu/libcuda.so"
-)
 
 func init() {
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -43,6 +40,7 @@ type AllocEvent struct {
 }
 
 func main() {
+	initFlags()
 	stopper := make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
@@ -51,7 +49,7 @@ func main() {
 		log.Fatalf("loading objects: %s", err)
 	}
 	defer objs.Close()
-	ex, err := link.OpenExecutable(LIBCUDA_PATH)
+	ex, err := link.OpenExecutable(FlagLibCUDAPath)
 	if err != nil {
 		log.Fatalf("opening executable: %s", err)
 	}
@@ -82,7 +80,12 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 	allocsData := NewAllocMap()
-	go allocsData.printAllocMapPeriodically()
+	if FlagTracePrint {
+		go allocsData.printAllocMapPeriodically()
+	}
+	if FlagExportMetrics {
+		go startPrometheusExporter()
+	}
 	go allocsData.CleanupExited()
 	go func() {
 		for {

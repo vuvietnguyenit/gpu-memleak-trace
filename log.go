@@ -5,10 +5,10 @@ import (
 	"os"
 )
 
-func init() {
+func initLogger(level slog.Level) {
 	// Explicitly use text handler
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug, // set log level
+		Level: slog.LevelInfo, // set log level
 	}))
 	slog.SetDefault(logger)
 }
