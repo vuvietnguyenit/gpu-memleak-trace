@@ -1,4 +1,4 @@
-# cuda-trace
+# GPU trace exporter 
 
 ## Build
 

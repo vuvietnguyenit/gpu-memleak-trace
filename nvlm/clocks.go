@@ -33,11 +33,10 @@ func GetGpuClocks(deviceIndex int) (map[string]uint, error) {
 		val, err := GetClocksInfo(deviceIndex, clkType)
 		if err != nil {
 			fmt.Printf("failed to get %s clock: %v\n", name, err)
-			continue // Skip this clock if retrieval fails
+			continue
 		}
 		clock := C.uint(val)
-		result[name] = uint(clock) // Convert C.uint to uint for Go compatibility
-		// Only add to result if the clock was successfully retrieved
+		result[name] = uint(clock)
 	}
 	if len(result) == 0 {
 		return nil, fmt.Errorf("failed to retrieve any clocks for device %d", deviceIndex)
