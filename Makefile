@@ -1,4 +1,4 @@
-PROG := memtraceprog
+PROG := cudamemleakdetector
 
 
 all: build

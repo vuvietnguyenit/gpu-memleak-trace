@@ -26,3 +26,4 @@ bin/
 *_bpfel.go
 *.o
 tmp/
+__debug*

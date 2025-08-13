@@ -20,7 +20,17 @@ class GpuModelTrainer:
         self.optimizer.step()
         return loss.item()
 
-    def run(self, epochs=10000):
+    def random_free_memory(self):
+        """Randomly free some leaked tensors."""
+        if self.leak_list and random.random() < 0.2:  # 20% chance
+            num_to_free = random.randint(1, min(3, len(self.leak_list)))
+            for _ in range(num_to_free):
+                idx = random.randrange(len(self.leak_list))
+                del self.leak_list[idx]
+            torch.cuda.empty_cache()
+            print(f"💡 Freed {num_to_free} tensors, remaining leaks: {len(self.leak_list)}")
+
+    def run(self, epochs=1000):
         for epoch in range(epochs):
             x = torch.randn(1024, 100, device=self.device)
             y = torch.randn(1024, 1, device=self.device)
@@ -31,6 +41,9 @@ class GpuModelTrainer:
             if epoch % 10 == 0:
                 leak_tensor = torch.randn(2048, 2048, device=self.device)  # ~32MB per leak
                 self.leak_list.append(leak_tensor)
+
+            # Occasionally free some leaked memory
+            self.random_free_memory()
 
             if epoch % 100 == 0:
                 allocated_mem = torch.cuda.memory_allocated(self.device) / 1024**2
