@@ -1,11 +1,14 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/spf13/pflag"
 )
 
 var (
@@ -17,18 +20,42 @@ var (
 	FlagExportMetrics  bool          // export metrics as Prometheus exporter
 )
 
+func parseIntervalFlag(name string) time.Duration {
+	raw := pflag.Lookup(name).Value.String()
+	if strings.HasSuffix(raw, "s") || strings.HasSuffix(raw, "m") || strings.HasSuffix(raw, "h") {
+		if dur, err := time.ParseDuration(raw); err == nil {
+			return dur
+		}
+	}
+	if sec, err := strconv.Atoi(raw); err == nil {
+		return time.Duration(sec) * time.Second
+	}
+	if dur, err := time.ParseDuration(raw); err == nil {
+		return dur
+	}
+	return 0
+}
+
 func initFlags() {
-	flag.StringVar(&FlagVerbose, "log-verbose", "INFO", "Log verbosity level (DEBUG, INFO, WARN, ERROR)")
-	flag.StringVar(&FlagLibCUDAPath, "libcuda-path", "/usr/lib/x86_64-linux-gnu/libcuda.so", "Path to libcuda.so")
-	flag.BoolVar(&FlagTracePrint, "trace-print", false, "Enable periodic printing of allocation map")
-	flag.DurationVar(&FlagPrintInterval, "interval", 2*time.Second, "Trace print interval")
-	flag.DurationVar(&FlagUpdateInterval, "update-interval", 2*time.Second, "Metrics update interval")
-	flag.BoolVar(&FlagExportMetrics, "export-metrics", false, "Export metrics as Prometheus exporter")
-	flag.Parse()
+	pflag.StringVar(&FlagVerbose, "log-verbose", "INFO", "Log verbosity level (DEBUG, INFO, WARN, ERROR)")
+	pflag.StringVar(&FlagLibCUDAPath, "libcuda-path", "/usr/lib/x86_64-linux-gnu/libcuda.so", "Path to libcuda.so")
+	pflag.BoolVar(&FlagTracePrint, "trace-print", false, "Enable periodic printing of allocation map")
+	pflag.DurationVar(&FlagPrintInterval, "interval", 2*time.Second, "Trace print interval")
+	pflag.DurationVar(&FlagUpdateInterval, "update-interval", 2*time.Second, "Metrics update interval")
+	pflag.BoolVar(&FlagExportMetrics, "export-metrics", false, "Export metrics as Prometheus exporter")
+	pflag.Parse()
+
+	FlagPrintInterval = parseIntervalFlag("interval")
+	FlagUpdateInterval = parseIntervalFlag("update-interval")
 
 	if !FlagTracePrint && !FlagExportMetrics {
 		fmt.Fprintln(os.Stderr, "Error: You must enable either --trace-print or --export-metrics")
-		flag.Usage()
+		pflag.Usage()
+		os.Exit(1)
+	}
+	if !FlagTracePrint && pflag.Lookup("interval").Changed {
+		fmt.Fprintln(os.Stderr, "\nError: --interval can only be used with --trace-print")
+		pflag.Usage()
 		os.Exit(1)
 	}
 
