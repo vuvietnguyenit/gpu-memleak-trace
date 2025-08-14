@@ -28,3 +28,4 @@ bin/
 tmp/
 __debug*
 gpu-memleak-trace
+note.txt
