@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -146,35 +147,54 @@ func getProcessInfo(pid uint32) (string, string, error) {
 	return u.Username, comm, nil
 }
 
+type PIDMem struct {
+	PID   uint32
+	Total uint64
+}
+
+func (a *AllocMap) aggregateResourcePID() []PIDMem {
+	snapshot := a.Snapshot()
+	slog.Debug("Current allocs_data", "data", snapshot)
+	result := make(map[uint32]uint64)
+
+	for pid, allocs := range snapshot {
+		var totalPerPID uint64
+		for _, size := range allocs {
+			totalPerPID += size
+		}
+		result[pid] = totalPerPID
+	}
+	sorted := make([]PIDMem, 0, len(result))
+	for pid, total := range result {
+		sorted = append(sorted, PIDMem{PID: pid, Total: total})
+	}
+
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Total > sorted[j].Total
+	})
+	// Add cut-off if neccessary
+	return sorted
+}
+
 func (a *AllocMap) printAllocMapPeriodically() {
 	ticker := time.NewTicker(FlagPrintInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		snapshot := a.Snapshot()
-		slog.Debug("Current allocs_data", "data", snapshot)
-		result := make(map[uint32]uint64)
-
-		for pid, allocs := range a.data {
-			var totalPerPID uint64
-			for _, size := range allocs {
-				totalPerPID += size
-			}
-			result[pid] = totalPerPID
-		}
+		result := a.aggregateResourcePID()
 		// Clear screen before printing (like htop)
 		fmt.Print("\033[H\033[2J")
 		fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "PID\tUSER\tCOMM\tLEAKED")
 
-		for pid, total := range result {
-			user, comm, err := getProcessInfo(pid)
+		for _, proc := range result {
+			user, comm, err := getProcessInfo(proc.PID)
 			if err != nil {
 				user = "?"
 				comm = "?"
 			}
-			fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", pid, user, comm, humanSize(int64(total)))
+			fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", proc.PID, user, comm, humanSize(int64(proc.Total)))
 		}
 		fmt.Fprintln(w, "----\t----\t----\t-----------")
 		w.Flush()
