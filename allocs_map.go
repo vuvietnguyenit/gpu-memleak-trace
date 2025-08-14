@@ -5,8 +5,12 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"os/user"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
+	"syscall"
 	"text/tabwriter"
 	"time"
 )
@@ -114,6 +118,34 @@ func humanSize(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
+func getProcessInfo(pid uint32) (string, string, error) {
+	// 1. Get COMM (process name) from /proc/<pid>/comm
+	commPath := filepath.Join("/proc", strconv.Itoa(int(pid)), "comm")
+	commBytes, err := os.ReadFile(commPath)
+	if err != nil {
+		return "", "", fmt.Errorf("read comm: %w", err)
+	}
+	comm := strings.TrimSpace(string(commBytes))
+
+	// 2. Get UID from stat info
+	procPath := filepath.Join("/proc", strconv.Itoa(int(pid)))
+	stat, err := os.Stat(procPath)
+	if err != nil {
+		return "", "", fmt.Errorf("stat proc: %w", err)
+	}
+
+	sys := stat.Sys().(*syscall.Stat_t)
+	uid := sys.Uid
+
+	// 3. Convert UID to username
+	u, err := user.LookupId(fmt.Sprintf("%d", uid))
+	if err != nil {
+		return "", comm, fmt.Errorf("lookup user: %w", err)
+	}
+
+	return u.Username, comm, nil
+}
+
 func (a *AllocMap) printAllocMapPeriodically() {
 	ticker := time.NewTicker(FlagPrintInterval)
 	defer ticker.Stop()
@@ -130,14 +162,21 @@ func (a *AllocMap) printAllocMapPeriodically() {
 			}
 			result[pid] = totalPerPID
 		}
-		fmt.Println("Time:", time.Now().Format(time.RFC3339))
+		// Clear screen before printing (like htop)
+		fmt.Print("\033[H\033[2J")
+		fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "PID\tLEAKED")
+		fmt.Fprintln(w, "PID\tUSER\tCOMM\tLEAKED")
 
 		for pid, total := range result {
-			fmt.Fprintf(w, "%d\t%s\n", pid, humanSize(int64(total)))
+			user, comm, err := getProcessInfo(pid)
+			if err != nil {
+				user = "?"
+				comm = "?"
+			}
+			fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", pid, user, comm, humanSize(int64(total)))
 		}
-		fmt.Fprintln(w, "----\t-----------")
+		fmt.Fprintln(w, "----\t----\t----\t-----------")
 		w.Flush()
 	}
 
