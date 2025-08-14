@@ -1,4 +1,4 @@
-module ebpf-test
+module git.itim.vn/docker/gpu-memleak-trace
 
 go 1.24.0
 

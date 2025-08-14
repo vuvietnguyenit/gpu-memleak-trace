@@ -27,3 +27,4 @@ bin/
 *.o
 tmp/
 __debug*
+gpu-memleak-trace

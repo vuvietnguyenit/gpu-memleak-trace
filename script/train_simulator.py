@@ -30,7 +30,7 @@ class GpuModelTrainer:
             torch.cuda.empty_cache()
             print(f"💡 Freed {num_to_free} tensors, remaining leaks: {len(self.leak_list)}")
 
-    def run(self, epochs=1000):
+    def run(self, epochs=100000):
         for epoch in range(epochs):
             x = torch.randn(1024, 100, device=self.device)
             y = torch.randn(1024, 1, device=self.device)
