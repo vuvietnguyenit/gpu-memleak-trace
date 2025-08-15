@@ -1,8 +1,11 @@
 package main
 
-import "log/slog"
+import (
+	"context"
+	"log/slog"
+)
 
-func startPrometheusExporter() {
+func startPrometheusExporter(ctx context.Context) {
 	slog.Info("Starting Prometheus exporter...")
 	// TODO: Implement metrics server
 }
