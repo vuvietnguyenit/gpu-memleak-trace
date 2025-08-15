@@ -105,7 +105,6 @@ func main() {
 					log.Printf("failed to parse event: %v", err)
 					continue
 				}
-				log.Println(e)
 				switch e.EventType {
 				case EVENT_MALLOC:
 					allocsData.AddAlloc(e.Pid, e.Dptr, e.Size)
