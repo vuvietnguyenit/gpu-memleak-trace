@@ -37,8 +37,12 @@ enum event_type {
 
 struct alloc_event {
   __u32 pid;
+  __u32 tid; // Thread ID
+  __u32 uid;
+  __s32 stack_id; // user stack id
   __u64 size;
   __u64 dptr;
+  char comm[16]; // <- command of proc
   enum event_type event_type;
   int retval;
 };
@@ -49,6 +53,13 @@ struct {
   __type(value, struct alloc_info_t);
   __uint(max_entries, 1024);
 } inflight SEC(".maps");
+
+struct {
+  __uint(type, BPF_MAP_TYPE_STACK_TRACE);
+  __uint(key_size, sizeof(__u32));
+  __uint(value_size, 127 * sizeof(__u64));
+  __uint(max_entries, 8192);
+} stack_traces SEC(".maps");
 
 struct {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -79,6 +90,7 @@ SEC("uretprobe/cuMemAlloc")
 int trace_malloc_return(struct pt_regs *ctx) {
   __u64 pid_tgid = bpf_get_current_pid_tgid();
   __u32 pid = pid_tgid >> 32;
+  __u64 uid_gid = bpf_get_current_uid_gid();
 
   int retval = PT_REGS_RC(ctx);
   struct alloc_info_t *info;
@@ -99,10 +111,14 @@ int trace_malloc_return(struct pt_regs *ctx) {
     goto cleanup;
 
   event->pid = pid_tgid >> 32;
+  event->tid = (__u32)pid_tgid;
+  event->uid = (__u32)uid_gid;
+  event->stack_id = bpf_get_stackid(ctx, &stack_traces, BPF_F_USER_STACK);
   event->size = info->size;
   event->dptr = real_dptr; // CUdeviceptr dptr
   event->retval = PT_REGS_RC(ctx);
   event->event_type = EVENT_MALLOC;
+  bpf_get_current_comm(&event->comm, sizeof(event->comm));
   bpf_ringbuf_submit(event, 0);
 
 cleanup:
@@ -114,6 +130,8 @@ SEC("uprobe/cuMemFree")
 int trace_cuMemFree(struct pt_regs *ctx) {
   struct alloc_event *e;
   __u64 pid_tgid = bpf_get_current_pid_tgid();
+  __u64 uid_gid = bpf_get_current_uid_gid();
+
   __u64 dptr = PT_REGS_PARM1(ctx);
   __u32 pid = pid_tgid >> 32;
   bpf_printk("cuMemFree: pid_tgid=%llu, dptr_addr=0x%llx", pid_tgid, dptr);
@@ -122,10 +140,13 @@ int trace_cuMemFree(struct pt_regs *ctx) {
   if (!e) {
     return 0;
   }
-
   e->pid = pid_tgid >> 32;
   e->dptr = dptr; // CUdeviceptr dptr
   e->event_type = EVENT_FREE;
+  e->tid = (__u32)pid_tgid;
+  e->uid = (__u32)uid_gid;
+  e->retval = -1;
+  bpf_get_current_comm(&e->comm, sizeof(e->comm));
   bpf_ringbuf_submit(e, 0);
   return 0;
 }
