@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -80,24 +81,33 @@ func (a *AllocMap) Snapshot() map[uint32]map[uint64]uint64 {
 	return copyData
 }
 
-func (a *AllocMap) CleanupExited() {
+func (a *AllocMap) CleanupExited(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Second) // adjust interval if needed
+	defer ticker.Stop()
+
 	for {
-		time.Sleep(1 * time.Second)
-		slog.Debug("Checking for exited PIDs...", "data", a.String())
-		a.mu.Lock()
-		for pid := range a.data {
-			if !pidExists(pid) || len(a.data[pid]) == 0 {
-				delete(a.data, pid)
-				t := fmt.Sprintf("PID %d exited — removing from allocs map", pid)
-				slog.Debug(t)
+		select {
+		case <-ctx.Done():
+			slog.Debug("Stopping CleanupExited...")
+			return
+		case <-ticker.C:
+			slog.Debug("Checking for exited PIDs...", "data", a.String())
+			a.mu.Lock()
+			for pid := range a.data {
+				if !pidExists(pid) || len(a.data[pid]) == 0 {
+					delete(a.data, pid)
+					t := fmt.Sprintf("PID %d exited — removing from allocs map", pid)
+					slog.Debug(t)
+				}
+				if len(a.data[pid]) == 0 {
+					delete(a.data, pid)
+					t := fmt.Sprintf("PID %d has no allocations left — removing from allocs map", pid)
+					slog.Debug(t)
+				}
 			}
-			if len(a.data[pid]) == 0 {
-				delete(a.data, pid)
-				t := fmt.Sprintf("PID %d has no allocations left — removing from allocs map", pid)
-				slog.Debug(t)
-			}
+			a.mu.Unlock()
 		}
-		a.mu.Unlock()
+
 	}
 }
 
@@ -176,28 +186,34 @@ func (a *AllocMap) aggregateResourcePID() []PIDMem {
 	return sorted
 }
 
-func (a *AllocMap) printAllocMapPeriodically() {
+func (a *AllocMap) printAllocMapPeriodically(ctx context.Context) {
 	ticker := time.NewTicker(FlagPrintInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		result := a.aggregateResourcePID()
-		// Clear screen before printing (like htop)
-		fmt.Print("\033[H\033[2J")
-		fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "PID\tUSER\tCOMM\tLEAKED")
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Debug("Stopping printAllocMapPeriodically...")
+			return
+		case <-ticker.C:
+			result := a.aggregateResourcePID()
+			// Clear screen before printing (like htop)
+			fmt.Print("\033[H\033[2J")
+			fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "PID\tUSER\tCOMM\tLEAKED")
 
-		for _, proc := range result {
-			user, comm, err := getProcessInfo(proc.PID)
-			if err != nil {
-				user = "?"
-				comm = "?"
+			for _, proc := range result {
+				user, comm, err := getProcessInfo(proc.PID)
+				if err != nil {
+					user = "?"
+					comm = "?"
+				}
+				fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", proc.PID, user, comm, humanSize(int64(proc.Total)))
 			}
-			fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", proc.PID, user, comm, humanSize(int64(proc.Total)))
+			fmt.Fprintln(w, "----\t----\t----\t-----------")
+			w.Flush()
 		}
-		fmt.Fprintln(w, "----\t----\t----\t-----------")
-		w.Flush()
 	}
 
 }

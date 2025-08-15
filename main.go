@@ -4,10 +4,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/cilium/ebpf/link"
@@ -23,24 +25,10 @@ func init() {
 	}
 }
 
-type EventType int32
-
-const (
-	EVENT_MALLOC EventType = 0
-	EVENT_FREE   EventType = 1
-)
-
-type AllocEvent struct {
-	Pid       uint32
-	_         uint32 // padding to align to 8-byte boundary
-	Size      uint64
-	Dptr      uint64
-	EventType EventType
-	Retval    int32
-}
-
 func main() {
 	initFlags()
+	ctx, cancel := context.WithCancel(context.Background())
+
 	stopper := make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
@@ -77,42 +65,65 @@ func main() {
 		log.Fatalf("failed to read ring buffer: %v", err)
 	}
 	defer rd.Close()
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
+	var wg sync.WaitGroup
+
 	allocsData := NewAllocMap()
 	if FlagTracePrint {
-		go allocsData.printAllocMapPeriodically()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			allocsData.printAllocMapPeriodically(ctx)
+		}()
 	}
 	if FlagExportMetrics {
-		go startPrometheusExporter()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			startPrometheusExporter(ctx)
+		}()
 	}
-	go allocsData.CleanupExited()
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		allocsData.CleanupExited(ctx)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 		for {
-			record, err := rd.Read()
-			if err != nil {
-				log.Fatalf("ringbuf read failed: %v", err)
+			select {
+			case <-stopper:
+				return
+			default:
+				record, err := rd.Read()
+				if err != nil {
+					log.Fatalf("ringbuf read failed: %v", err)
+				}
+
+				var e Event
+				if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &e); err != nil {
+					log.Printf("failed to parse event: %v", err)
+					continue
+				}
+				log.Println(e)
+				switch e.EventType {
+				case EVENT_MALLOC:
+					allocsData.AddAlloc(e.Pid, e.Dptr, e.Size)
+				case EVENT_FREE:
+					allocsData.FreeAlloc(e.Pid, e.Dptr)
+				default:
+					log.Printf("Unknown event type: %d", e.EventType)
+				}
 			}
 
-			var e AllocEvent
-			if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &e); err != nil {
-				log.Printf("failed to parse event: %v", err)
-				continue
-			}
-			switch e.EventType {
-			case EVENT_MALLOC:
-				allocsData.AddAlloc(e.Pid, e.Dptr, e.Size)
-			case EVENT_FREE:
-				allocsData.FreeAlloc(e.Pid, e.Dptr)
-			default:
-				log.Printf("Unknown event type: %d", e.EventType)
-			}
 		}
 
 	}()
 
-	<-stop
+	<-stopper
 
-	log.Println("Exiting...")
-
+	log.Println("Shutting down gracefully...")
+	cancel()
+	wg.Wait()
+	log.Println("All goroutines stopped.")
 }
