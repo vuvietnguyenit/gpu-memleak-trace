@@ -1,0 +1,9 @@
+uprobe:/usr/lib/x86_64-linux-gnu/libcuda.so:cuMemAlloc* {
+    printf("PID %d %s with bytesize=%lu\n", pid, probe, arg1);
+}
+uretprobe:/usr/lib/x86_64-linux-gnu/libcuda.so:cuMemAlloc* {
+    printf("PID %d %s retval=%d\n", pid, probe, retval);
+}
+uprobe:/usr/lib/x86_64-linux-gnu/libcuda.so:cuMemFree* {
+    printf("PID %d %s cuMemFree(dptr=0x%lx)\n", pid, probe, arg0);
+}

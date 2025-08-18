@@ -49,7 +49,7 @@ class GpuModelTrainer:
                 allocated_mem = torch.cuda.memory_allocated(self.device) / 1024**2
                 print(f"[Epoch {epoch}] Loss: {loss:.4f} | Leaked: {len(self.leak_list)} | GPU Mem: {allocated_mem:.2f} MB")
 
-            time.sleep(0.01)
+            time.sleep(1)
 
 
 if __name__ == "__main__":

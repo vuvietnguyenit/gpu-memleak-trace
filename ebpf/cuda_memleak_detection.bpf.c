@@ -81,8 +81,6 @@ int trace_cu_mem_alloc_entry(struct pt_regs *ctx) {
       &inflight, &pid_tgid,
       &(struct alloc_info_t){.size = size, .dptr_addr = (CUdeviceptr)dptr_ptr},
       BPF_ANY);
-  bpf_printk("cuMemAlloc entry: pid_tgid=%llu, size=%llu, ptr=0x%llx", pid_tgid,
-             size, dptr_ptr);
   return 0;
 }
 
@@ -90,7 +88,10 @@ SEC("uretprobe/cuMemAlloc")
 int trace_malloc_return(struct pt_regs *ctx) {
   __u64 pid_tgid = bpf_get_current_pid_tgid();
   __u32 pid = pid_tgid >> 32;
+  __u32 tid = (__u32)pid_tgid;
   __u64 uid_gid = bpf_get_current_uid_gid();
+  __u32 uid = (__u32)uid_gid;
+  __u32 sid = bpf_get_stackid(ctx, &stack_traces, BPF_F_USER_STACK);
 
   int retval = PT_REGS_RC(ctx);
   struct alloc_info_t *info;
@@ -104,16 +105,16 @@ int trace_malloc_return(struct pt_regs *ctx) {
   CUdeviceptr real_dptr;
   bpf_probe_read_user(&real_dptr, sizeof(real_dptr),
                       (const void *)info->dptr_addr);
-  bpf_printk("cuMemAlloc return: pid=%u, size=%llu, dptr_addr=0x%llx", pid,
-             info->size, real_dptr);
+  bpf_printk("cuMemAlloc return: pid=%u, sid=%d size=%llu, dptr_addr=0x%llx",
+             pid, sid, info->size, real_dptr);
   event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
   if (!event)
     goto cleanup;
 
-  event->pid = pid_tgid >> 32;
-  event->tid = (__u32)pid_tgid;
-  event->uid = (__u32)uid_gid;
-  event->stack_id = bpf_get_stackid(ctx, &stack_traces, BPF_F_USER_STACK);
+  event->pid = pid;
+  event->tid = tid;
+  event->uid = uid;
+  event->stack_id = sid;
   event->size = info->size;
   event->dptr = real_dptr; // CUdeviceptr dptr
   event->retval = PT_REGS_RC(ctx);
@@ -134,17 +135,21 @@ int trace_cuMemFree(struct pt_regs *ctx) {
 
   __u64 dptr = PT_REGS_PARM1(ctx);
   __u32 pid = pid_tgid >> 32;
-  bpf_printk("cuMemFree: pid_tgid=%llu, dptr_addr=0x%llx", pid_tgid, dptr);
+  __u32 tid = (__u32)pid_tgid;
+  __u32 uid = (__u32)uid_gid;
+
+  bpf_printk("cuMemFree: pid=%d tid=%d uid=%d dptr_addr=0x%llx\n", pid, tid,
+             uid, dptr);
 
   e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
   if (!e) {
     return 0;
   }
-  e->pid = pid_tgid >> 32;
+  e->pid = pid;
   e->dptr = dptr; // CUdeviceptr dptr
   e->event_type = EVENT_FREE;
-  e->tid = (__u32)pid_tgid;
-  e->uid = (__u32)uid_gid;
+  e->tid = tid;
+  e->uid = uid;
   e->retval = -1;
   bpf_get_current_comm(&e->comm, sizeof(e->comm));
   bpf_ringbuf_submit(e, 0);
