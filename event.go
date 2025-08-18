@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type EventType int32
 
@@ -32,31 +35,21 @@ type Event struct {
 	Retval    int32
 }
 
-func (a Event) String() string {
-	commStr := string(a.Comm[:])
-	// trim trailing null bytes
-	for i := 0; i < len(commStr); i++ {
-		if commStr[i] == 0 {
-			commStr = commStr[:i]
-			break
-		}
-	}
+func (e Event) String() string {
+	comm := strings.TrimRight(string(e.Comm[:]), "\x00")
 
-	switch a.EventType {
+	switch e.EventType {
 	case EVENT_MALLOC:
 		return fmt.Sprintf(
-			"[PID=%d TID=%d UID=%d COMM=%s] Event=%s StackID=%d Size=%d bytes Dptr=0x%x Retval=%d",
-			a.Pid, a.Tid, a.Uid, commStr, a.EventType, a.StackID, a.Size, a.Dptr, a.Retval,
+			"[MALLOC] pid=%d tid=%d uid=%d comm=%s size=%d dptr=0x%x stack_id=%d retval=%d",
+			e.Pid, e.Tid, e.Uid, comm, e.Size, e.Dptr, e.StackID, e.Retval,
 		)
 	case EVENT_FREE:
 		return fmt.Sprintf(
-			"[PID=%d TID=%d UID=%d COMM=%s] Event=%s Dptr=0x%x Retval=%d",
-			a.Pid, a.Tid, a.Uid, commStr, a.EventType, a.Dptr, a.Retval,
+			"[FREE]   pid=%d tid=%d uid=%d comm=%s dptr=0x%x stack_id=%d retval=%d",
+			e.Pid, e.Tid, e.Uid, comm, e.Dptr, e.StackID, e.Retval,
 		)
 	default:
-		return fmt.Sprintf(
-			"[PID=%d TID=%d UID=%d COMM=%s] Event=%s StackID=%d Size=%d bytes Dptr=0x%x Retval=%d",
-			a.Pid, a.Tid, a.Uid, commStr, a.EventType, a.StackID, a.Size, a.Dptr, a.Retval,
-		)
+		return fmt.Sprintf("[UNKNOWN] %+v\n", e)
 	}
 }
