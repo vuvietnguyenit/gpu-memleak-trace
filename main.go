@@ -3,9 +3,7 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"log"
 	"os"
 	"os/signal"
@@ -13,7 +11,6 @@ import (
 	"syscall"
 
 	"github.com/cilium/ebpf/link"
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 )
 
@@ -60,11 +57,7 @@ func main() {
 	defer freeRetSym.Close()
 
 	log.Println("eBPF program running... Press Ctrl+C to exit.")
-	rd, err := ringbuf.NewReader(objs.Events)
-	if err != nil {
-		log.Fatalf("failed to read ring buffer: %v", err)
-	}
-	defer rd.Close()
+
 	var wg sync.WaitGroup
 
 	allocsData := NewAllocMap()
@@ -90,32 +83,11 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for {
-			select {
-			case <-stopper:
-				return
-			default:
-				record, err := rd.Read()
-				if err != nil {
-					log.Fatalf("ringbuf read failed: %v", err)
-				}
-
-				var e Event
-				if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &e); err != nil {
-					log.Printf("failed to parse event: %v", err)
-					continue
-				}
-				switch e.EventType {
-				case EVENT_MALLOC:
-					allocsData.AddAlloc(e.Pid, e.Dptr, e.Size)
-				case EVENT_FREE:
-					allocsData.FreeAlloc(e.Pid, e.Dptr)
-				default:
-					log.Printf("Unknown event type: %d", e.EventType)
-				}
-			}
-
+		rb := RingBuffer{
+			Event:     objs.Events,
+			AllocsMap: allocsData,
 		}
+		rb.RbReserve(ctx)
 
 	}()
 

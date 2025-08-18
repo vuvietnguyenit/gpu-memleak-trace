@@ -8,7 +8,7 @@ import (
 func initLogger(level slog.Level) {
 	// Explicitly use text handler
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo, // set log level
+		Level: level, // set log level
 	}))
 	slog.SetDefault(logger)
 }
