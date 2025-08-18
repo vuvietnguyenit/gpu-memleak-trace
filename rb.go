@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"log/slog"
 
@@ -53,17 +55,27 @@ func (r *RingBuffer) RbReserve(ctx context.Context) {
 		case record := <-records:
 			var e Event
 			if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &e); err != nil {
-				slog.Warn("failed to parse event: %v", err)
+				slog.Warn("failed to parse event", "error", err)
 				continue
 			}
-
+			if FlagDebug {
+				if FlagPrintMallocOnly && e.EventType != EVENT_MALLOC {
+					return
+				}
+				if FlagPrintJSON {
+					data, _ := json.MarshalIndent(e, "", "  ")
+					fmt.Println(string(data))
+				} else if FlagPrintEvents {
+					fmt.Println(e)
+				}
+			}
 			switch e.EventType {
 			case EVENT_MALLOC:
 				r.AllocsMap.AddAlloc(e.Pid, e.Dptr, e.Size)
 			case EVENT_FREE:
 				r.AllocsMap.FreeAlloc(e.Pid, e.Dptr)
 			default:
-				slog.Warn("unknown event type", e.EventType)
+				slog.Warn("unknown event type", "etype", e.EventType)
 			}
 		}
 
