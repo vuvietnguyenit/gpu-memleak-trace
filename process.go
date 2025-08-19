@@ -13,14 +13,6 @@ type ProcessInfo struct {
 	UID  uint32
 }
 
-func NewProcessInfoFromEvent(ev Event) *ProcessInfo {
-	return &ProcessInfo{
-		PID:  ev.Pid,
-		UID:  ev.Uid,
-		Comm: ev.Comm, // remove nulls
-	}
-}
-
 // Get full command by PID
 func (p *ProcessInfo) FullCommand() (string, error) {
 	cmdPath := fmt.Sprintf("/proc/%d/cmdline", p.PID)
