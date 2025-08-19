@@ -2,7 +2,7 @@
 
 GPU Memory Leak Diagnostic & Monitoring Tool
 
-This tool helps diagnose GPU-related issues by tracing memory allocations and deallocations in real time. It detects potential leaks, correlates them with process metadata (PID, user, command), and periodically reports statistics such as total leaked memory. The collected data can also be exported as Prometheus metrics, enabling integration with dashboards like Grafana for visualization and long-term analysis.
+This tool helps diagnose GPU-related issues by tracing memory allocations and deallocations in real time. It detects potential leaks, correlates them with process metadata (PID, user, command), and periodically reports statistics such as total leaked memory. The collected data can also be exported as Prometheus metrics.
 
 ## CLI
 
