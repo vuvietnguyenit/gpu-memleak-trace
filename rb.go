@@ -15,8 +15,8 @@ import (
 )
 
 type RingBuffer struct {
-	Event     *ebpf.Map
-	AllocsMap *AllocMap
+	Event       *ebpf.Map
+	AllocsTable *AllocTable
 }
 
 func (r *RingBuffer) RbReserve(ctx context.Context) {
@@ -69,16 +69,20 @@ func (r *RingBuffer) RbReserve(ctx context.Context) {
 					fmt.Println(e)
 				}
 			}
-			switch e.EventType {
-			case EVENT_MALLOC:
-				r.AllocsMap.AddAlloc(e.Pid, e.Dptr, e.Size)
-			case EVENT_FREE:
-				r.AllocsMap.FreeAlloc(e.Pid, e.Dptr)
-			default:
-				slog.Warn("unknown event type", "etype", e.EventType)
-			}
+			r.handleEvent(r.AllocsTable, e)
 		}
 
 	}
 
+}
+
+func (r *RingBuffer) handleEvent(ta *AllocTable, ev Event) {
+	switch ev.EventType {
+	case EVENT_MALLOC:
+		ta.Add(ev)
+	case EVENT_FREE:
+		ta.Free(ev)
+	default:
+		slog.Warn("unknown event type", "etype", ev.EventType)
+	}
 }
