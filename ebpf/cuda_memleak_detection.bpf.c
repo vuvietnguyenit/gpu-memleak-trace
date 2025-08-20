@@ -69,7 +69,6 @@ struct {
 SEC("uprobe/cuMemAlloc")
 int trace_cu_mem_alloc_entry(struct pt_regs *ctx) {
   __u64 pid_tgid = bpf_get_current_pid_tgid();
-  __u32 pid = pid_tgid >> 32;
   CUdeviceptr *dptr_ptr = (CUdeviceptr *)PT_REGS_PARM1(ctx);
   __u64 size = PT_REGS_PARM2(ctx);
   if (bpf_map_lookup_elem(&inflight, &pid_tgid)) {

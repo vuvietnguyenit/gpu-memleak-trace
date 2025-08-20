@@ -27,7 +27,7 @@ type Event struct {
 	Pid       uint32
 	Tid       uint32
 	Uid       uint32
-	StackID   int32
+	StackID   uint32
 	Size      uint64
 	Dptr      uint64
 	Comm      [16]byte
@@ -50,6 +50,6 @@ func (e Event) String() string {
 			e.Pid, e.Tid, e.Uid, comm, e.Dptr, e.StackID, e.Retval,
 		)
 	default:
-		return fmt.Sprintf("[UNKNOWN] %+v\n", e)
+		return fmt.Sprintf("[UNKNOWN]")
 	}
 }

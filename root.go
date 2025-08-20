@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -97,17 +98,17 @@ func appRun() {
 	var wg WG
 	allocsData := NewAllocTable()
 
-	// if !FlagDebug {
-	// 	// Debug mode: print events, no periodic metrics or exporters
-	// 	slog.Info("Running in DEBUG mode: ignoring --trace-print and --export-metrics")
-	// 	if FlagTracePrint {
-	// 		wg.Go(func() { allocsData.printAllocMapPeriodically(ctx) })
-	// 	}
-	// 	if FlagExportMetrics {
-	// 		wg.Go(func() { startPrometheusExporter(ctx) })
-	// 	}
-	// 	wg.Go(func() { allocsData.CleanupExited(ctx) })
-	// }
+	if !FlagDebug {
+		// Debug mode: print events, no periodic metrics or exporters
+		slog.Info("Running in DEBUG mode: ignoring --trace-print and --export-metrics")
+		if FlagTracePrint {
+			wg.Go(func() { allocsData.Print(ctx) })
+		}
+		if FlagExportMetrics {
+			wg.Go(func() { startPrometheusExporter(ctx) })
+		}
+		// wg.Go(func() { allocsData.CleanupExited(ctx) })
+	}
 	wg.Go(func() {
 		rb := RingBuffer{
 			Event:       objs.Events,

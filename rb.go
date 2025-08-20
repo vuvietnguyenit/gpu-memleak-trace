@@ -79,7 +79,7 @@ func (r *RingBuffer) RbReserve(ctx context.Context) {
 func (r *RingBuffer) handleEvent(ta *AllocTable, ev Event) {
 	switch ev.EventType {
 	case EVENT_MALLOC:
-		ta.Add(ev)
+		ta.Alloc(ev)
 	case EVENT_FREE:
 		ta.Free(ev)
 	default:
