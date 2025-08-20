@@ -84,7 +84,7 @@ func Bytes16ToString(b [16]byte) string {
 	return strings.TrimRight(s, "\x00")
 }
 
-func (t *AllocTable) Aggregate() {
+func (t *AllocTable) Aggregate() *Grouped {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -100,7 +100,7 @@ func (t *AllocTable) Aggregate() {
 			Total: entry.Size,
 		})
 	}
-	df.GroupAlloc()
+	return df.GroupAlloc()
 }
 
 func (t *AllocTable) Print(ctx context.Context) {
@@ -113,7 +113,8 @@ func (t *AllocTable) Print(ctx context.Context) {
 			slog.Debug("Stopping printAllocMapPeriodically...")
 			return
 		case <-ticker.C:
-			t.Aggregate()
+			g := t.Aggregate()
+			g.Print()
 		}
 	}
 }

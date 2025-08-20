@@ -2,7 +2,13 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
+
+	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/renderer"
+	"github.com/olekukonko/tablewriter/tw"
 )
 
 type Row struct {
@@ -41,12 +47,45 @@ type Grouped struct {
 	Group map[uint32]*Agg
 }
 
+func (g *Grouped) PrintTable() {
+	table := tablewriter.NewTable(os.Stdout, tablewriter.WithRenderer(renderer.NewBlueprint(tw.Rendition{
+		Settings: tw.Settings{Separators: tw.Separators{BetweenRows: tw.On}},
+	})))
+	table.Header([]string{"PID", "COMM", "SID", "TOTAL"})
+
+	for pid, agg := range g.Group {
+		// turn sets into joined strings with newlines
+		comms := strings.Join(setToSlice(agg.comms), "\n")
+		dptrs := strings.Join(setToSlice(agg.dptrs), "\n")
+		sids := strings.Join(setToSlice(agg.sids), "\n")
+
+		row := []string{
+			strconv.Itoa(int(pid)),
+			comms,
+			dptrs,
+			sids,
+			agg.total.HumanSize(),
+		}
+		table.Append(row)
+	}
+	fmt.Print("\033[H\033[2J")
+	table.Render()
+}
+
+func setToSlice(m map[string]struct{}) []string {
+	out := []string{}
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
 func (gr Grouped) Print() {
 	// Print results
 	for pid, g := range gr.Group {
 		fmt.Printf("PID: %d\n", pid)
 
-		fmt.Println("COMM:")
+		fmt.Println("COMM:TID:")
 		for c := range g.comms {
 			fmt.Printf("  %s\n", c)
 		}
@@ -63,7 +102,7 @@ func (gr Grouped) Print() {
 			fmt.Printf("  %s\n", s)
 		}
 
-		fmt.Printf("TOTAL: %d\n", g.total.HumanSize())
+		fmt.Printf("TOTAL: %s\n", g.total.HumanSize())
 		fmt.Println(strings.Repeat("-", 40))
 	}
 }
