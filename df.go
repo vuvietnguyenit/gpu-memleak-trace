@@ -84,8 +84,7 @@ func (gr Grouped) Print() {
 	// Print results
 	for pid, g := range gr.Group {
 		fmt.Printf("PID: %d\n", pid)
-
-		fmt.Println("COMM:TID:")
+		fmt.Println("COMM/TID:")
 		for c := range g.comms {
 			fmt.Printf("  %s\n", c)
 		}
@@ -103,7 +102,6 @@ func (gr Grouped) Print() {
 		}
 
 		fmt.Printf("TOTAL: %s\n", g.total.HumanSize())
-		fmt.Println(strings.Repeat("-", 40))
 	}
 }
 

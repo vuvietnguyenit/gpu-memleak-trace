@@ -114,6 +114,7 @@ func (t *AllocTable) Print(ctx context.Context) {
 			return
 		case <-ticker.C:
 			g := t.Aggregate()
+			fmt.Println(strings.Repeat("-", 20), time.Now().Format(time.RFC3339), strings.Repeat("-", 20))
 			g.Print()
 		}
 	}
