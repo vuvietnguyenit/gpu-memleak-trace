@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -41,7 +42,7 @@ func parseIntervalFlag(name string) time.Duration {
 }
 
 func addProdFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(&FlagVerbose, "log-verbose", "INFO", "Log verbosity level (DEBUG, INFO, WARN, ERROR)")
+	cmd.PersistentFlags().StringVar(&FlagVerbose, "log-verbose", slog.LevelInfo.String(), "Log verbosity level (DEBUG, INFO, WARN, ERROR)")
 	cmd.PersistentFlags().StringVar(&FlagLibCUDAPath, "libcuda-path", "/usr/lib/x86_64-linux-gnu/libcuda.so", "Path to libcuda.so")
 
 	cmd.PersistentFlags().BoolVar(&FlagTracePrint, "trace-print", false, "Enable periodic printing of allocation map")

@@ -36,11 +36,14 @@ func RootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "gpu-memleak-trace",
 		Short: "GPU memleak tracer",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			initLogger()
-		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			return validateFlags()
+			if err := validateFlags(); err != nil {
+				return err
+			}
+			if err := initLogger(); err != nil {
+				return err
+			}
+			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			appRun()

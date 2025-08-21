@@ -110,11 +110,15 @@ func (t *AllocTable) Print(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Debug("Stopping printAllocMapPeriodically...")
+			slog.Debug("Stopping Print action...")
 			return
 		case <-ticker.C:
-			g := t.Aggregate()
 			fmt.Println(strings.Repeat("-", 20), time.Now().Format(time.RFC3339), strings.Repeat("-", 20))
+			g := t.Aggregate()
+			if len(g.Group) == 0 {
+				fmt.Println("NO EVENT.")
+				continue
+			}
 			g.Print()
 		}
 	}

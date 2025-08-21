@@ -50,6 +50,6 @@ func (e Event) String() string {
 			e.Pid, e.Tid, e.Uid, comm, e.Dptr, e.StackID, e.Retval,
 		)
 	default:
-		return fmt.Sprintf("[UNKNOWN]")
+		return "[UNKNOWN]"
 	}
 }
