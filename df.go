@@ -13,7 +13,7 @@ import (
 
 type Row struct {
 	PID   uint32
-	Comm  string
+	Comm  [16]byte
 	Dptr  string
 	Tid   uint32
 	Sid   uint32

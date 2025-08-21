@@ -8,9 +8,9 @@ func TestGroupAlloc_SinglePID(t *testing.T) {
 	df := &DF{}
 	df.InitHeader([]Header{"PID", "COMM", "DPTR", "TID", "SID", "TOTAL"})
 
-	df.Insert(Row{PID: 100, Comm: "python", Dptr: "0xabc", Tid: 100, Sid: 1, Total: 10})
-	df.Insert(Row{PID: 100, Comm: "python", Dptr: "0xabc", Tid: 100, Sid: 1, Total: 5}) // duplicate
-	df.Insert(Row{PID: 100, Comm: "worker", Dptr: "0xdef", Tid: 101, Sid: 2, Total: 20})
+	df.Insert(Row{PID: 100, Comm: [16]byte{'p', 'y', 't', 'h', 'o', 'n'}, Dptr: "0xabc", Tid: 100, Sid: 1, Total: 10})
+	df.Insert(Row{PID: 100, Comm: [16]byte{'p', 'y', 't', 'h', 'o', 'n'}, Dptr: "0xabc", Tid: 100, Sid: 1, Total: 5}) // duplicate
+	df.Insert(Row{PID: 100, Comm: [16]byte{'w', 'o', 'r', 'k', 'e', 'r'}, Dptr: "0xdef", Tid: 101, Sid: 2, Total: 20})
 
 	df.GroupAlloc().Print()
 }
@@ -19,8 +19,8 @@ func TestGroupAlloc_MultiPID(t *testing.T) {
 	df := &DF{}
 	df.InitHeader([]Header{"PID", "COMM", "DPTR", "TID", "SID", "TOTAL"})
 
-	df.Insert(Row{PID: 200, Comm: "python", Dptr: "0xaaa", Tid: 200, Sid: 1, Total: 50})
-	df.Insert(Row{PID: 201, Comm: "java", Dptr: "0xbbb", Tid: 201, Sid: 2, Total: 100})
+	df.Insert(Row{PID: 200, Comm: [16]byte{'p', 'y', 't', 'h', 'o', 'n'}, Dptr: "0xaaa", Tid: 200, Sid: 1, Total: 50})
+	df.Insert(Row{PID: 201, Comm: [16]byte{'j', 'a', 'v', 'a'}, Dptr: "0xbbb", Tid: 201, Sid: 2, Total: 100})
 	df.GroupAlloc().Print()
 	if len(df.Rows) != 2 {
 		t.Fatalf("expected 2 rows inserted, got %d", len(df.Rows))
@@ -29,10 +29,10 @@ func TestGroupAlloc_MultiPID(t *testing.T) {
 
 func TestGroupAlloc_MultiplePIDs(t *testing.T) {
 	df := &DF{}
-	df.Insert(Row{PID: 100, Comm: "python", Dptr: "0xaaaa", Tid: 100, Sid: 1, Total: 10})
-	df.Insert(Row{PID: 100, Comm: "python", Dptr: "0xbbbb", Tid: 100, Sid: 1, Total: 20})
-	df.Insert(Row{PID: 200, Comm: "worker", Dptr: "0xcccc", Tid: 201, Sid: 2, Total: 5})
-	df.Insert(Row{PID: 200, Comm: "worker", Dptr: "0xcccc", Tid: 201, Sid: 2, Total: 5}) // duplicate row
+	df.Insert(Row{PID: 100, Comm: [16]byte{'p', 'y', 't', 'h', 'o', 'n'}, Dptr: "0xaaaa", Tid: 100, Sid: 1, Total: 10})
+	df.Insert(Row{PID: 100, Comm: [16]byte{'p', 'y', 't', 'h', 'o', 'n'}, Dptr: "0xbbbb", Tid: 100, Sid: 1, Total: 20})
+	df.Insert(Row{PID: 200, Comm: [16]byte{'w', 'o', 'r', 'k', 'e', 'r'}, Dptr: "0xcccc", Tid: 201, Sid: 2, Total: 5})
+	df.Insert(Row{PID: 200, Comm: [16]byte{'w', 'o', 'r', 'k', 'e', 'r'}, Dptr: "0xcccc", Tid: 201, Sid: 2, Total: 5}) // duplicate row
 
 	got := df.GroupAlloc()
 
