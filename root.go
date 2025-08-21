@@ -110,7 +110,7 @@ func appRun() {
 		if FlagExportMetrics {
 			wg.Go(func() { startPrometheusExporter(ctx) })
 		}
-		// wg.Go(func() { allocsData.CleanupExited(ctx) })
+		wg.Go(func() { allocsData.Cleanup(ctx) })
 	}
 	wg.Go(func() {
 		rb := RingBuffer{
