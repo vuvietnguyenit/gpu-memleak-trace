@@ -26,8 +26,10 @@ func (e EventType) String() string {
 type Event struct {
 	Pid       uint32
 	Tid       uint32
+	DeivceID  uint32
 	Uid       uint32
 	StackID   uint32
+	_         uint32 // padding to make struct 64 bytes
 	Size      uint64
 	Dptr      uint64
 	Comm      [16]byte

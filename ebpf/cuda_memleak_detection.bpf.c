@@ -38,6 +38,7 @@ enum event_type {
 struct alloc_event {
   __u32 pid;
   __u32 tid; // Thread ID
+  __s32 device;
   __u32 uid;
   __s32 stack_id; // user stack id
   __u64 size;
@@ -45,6 +46,11 @@ struct alloc_event {
   char comm[16]; // <- command of proc
   enum event_type event_type;
   int retval;
+};
+
+struct ctx_new_tmp {
+  __u64 pctx_ptr; // user pointer to CUcontext variable
+  __s32 dev;      // CUdevice (ordinal)
 };
 
 struct {
@@ -62,9 +68,141 @@ struct {
 } stack_traces SEC(".maps");
 
 struct {
+  __uint(type, BPF_MAP_TYPE_LRU_HASH);
+  __uint(max_entries, 32768);
+  __type(key, __u32); // TID
+  __type(value, struct ctx_new_tmp);
+} tmp_ctx SEC(".maps");
+
+struct {
+  __uint(type, BPF_MAP_TYPE_LRU_HASH);
+  __uint(max_entries, 65536);
+  __type(key, __u32);   // TID
+  __type(value, __u64); // current CUcontext handle
+} tid2ctx SEC(".maps");
+
+struct {
+  __uint(type, BPF_MAP_TYPE_LRU_HASH);
+  __uint(max_entries, 65536);
+  __type(key, __u64);   // CUcontext handle
+  __type(value, __s32); // CUdevice (GPU ordinal)
+} ctx2dev SEC(".maps");
+
+struct {
   __uint(type, BPF_MAP_TYPE_RINGBUF);
   __uint(max_entries, 1 << 25); // 16 MB buffer
 } events SEC(".maps");
+
+static __always_inline __u32 get_tid(void) {
+  return (__u32)bpf_get_current_pid_tgid();
+}
+static __always_inline __u32 get_pid(void) {
+  return (__u32)(bpf_get_current_pid_tgid() >> 32);
+}
+
+// ----- Context management probes -----
+
+// CUresult cuCtxCreate(CUcontext *pctx, unsigned int flags, CUdevice dev);
+SEC("uprobe/cuCtxCreate")
+int BPF_KPROBE(up_cuCtxCreate, __u64 pctx, __u32 flags, __s32 dev) {
+  __u32 tid = get_tid();
+  bpf_printk("up_cuCtxCreate %d", tid);
+
+  struct ctx_new_tmp tmp = {.pctx_ptr = pctx, .dev = dev};
+  bpf_map_update_elem(&tmp_ctx, &tid, &tmp, BPF_ANY);
+  return 0;
+}
+
+SEC("uretprobe/cuCtxCreate")
+int BPF_KRETPROBE(ur_cuCtxCreate, long ret) {
+  __u32 tid = get_tid();
+  bpf_printk("ur_cuCtxCreate ret %d", tid);
+
+  struct ctx_new_tmp *t = bpf_map_lookup_elem(&tmp_ctx, &tid);
+  if (!t)
+    return 0;
+
+  // Read CUcontext value written to *pctx
+  __u64 ctx_handle = 0;
+  bpf_probe_read_user(&ctx_handle, sizeof(ctx_handle),
+                      (const void *)t->pctx_ptr);
+
+  if (ret == 0 && ctx_handle) {
+    // Map ctx -> dev, and set current ctx for this thread
+    bpf_map_update_elem(&ctx2dev, &ctx_handle, &t->dev, BPF_ANY);
+    bpf_map_update_elem(&tid2ctx, &tid, &ctx_handle, BPF_ANY);
+  }
+  bpf_map_delete_elem(&tmp_ctx, &tid);
+  return 0;
+}
+
+// CUresult cuDevicePrimaryCtxRetain(CUcontext *pctx, CUdevice dev);
+SEC("uprobe/cuDevicePrimaryCtxRetain")
+int BPF_KPROBE(up_cuDevicePrimaryCtxRetain, __u64 pctx, __s32 dev) {
+  __u32 tid = get_tid();
+  bpf_printk("up_cuDevicePrimaryCtxRetain %d", tid);
+
+  struct ctx_new_tmp tmp = {.pctx_ptr = pctx, .dev = dev};
+  bpf_map_update_elem(&tmp_ctx, &tid, &tmp, BPF_ANY);
+  return 0;
+}
+
+SEC("uretprobe/cuDevicePrimaryCtxRetain")
+int BPF_KRETPROBE(ur_cuDevicePrimaryCtxRetain, long ret) {
+  __u32 tid = get_tid();
+  bpf_printk("ur_cuDevicePrimaryCtxRetain ret %d", tid);
+
+  struct ctx_new_tmp *t = bpf_map_lookup_elem(&tmp_ctx, &tid);
+  if (!t)
+    return 0;
+
+  __u64 ctx_handle = 0;
+  bpf_probe_read_user(&ctx_handle, sizeof(ctx_handle), (void *)t->pctx_ptr);
+
+  if (ret == 0 && ctx_handle) {
+    bpf_map_update_elem(&ctx2dev, &ctx_handle, &t->dev, BPF_ANY);
+    bpf_map_update_elem(&tid2ctx, &tid, &ctx_handle, BPF_ANY);
+  }
+  bpf_map_delete_elem(&tmp_ctx, &tid);
+  return 0;
+}
+
+// CUresult cuCtxSetCurrent(CUcontext ctx);
+SEC("uprobe/cuCtxSetCurrent")
+int BPF_KPROBE(up_cuCtxSetCurrent, __u64 ctx_handle) {
+  __u32 tid = get_tid();
+  bpf_printk("cuCtxSetCurrent %d", tid);
+  bpf_map_update_elem(&tid2ctx, &tid, &ctx_handle, BPF_ANY);
+  return 0;
+}
+
+// CUresult cuCtxPushCurrent(CUcontext ctx);
+SEC("uprobe/cuCtxPushCurrent")
+int BPF_KPROBE(up_cuCtxPushCurrent, __u64 ctx_handle) {
+  __u32 tid = get_tid();
+  bpf_printk("up_cuCtxPushCurrent ret %d", tid);
+  bpf_map_update_elem(&tid2ctx, &tid, &ctx_handle, BPF_ANY);
+  return 0;
+}
+
+// CUresult cuCtxPopCurrent(CUcontext *pctx);
+SEC("uretprobe/cuCtxPopCurrent")
+int BPF_KRETPROBE(ur_cuCtxPopCurrent, long ret) {
+  if (ret != 0)
+    return 0;
+  __u32 tid = get_tid();
+  bpf_printk("ur_cuCtxPopCurrent ret %d", tid);
+  __u64 pctx_ptr = PT_REGS_PARM1(ctx);
+  if (!pctx_ptr)
+    return 0;
+
+  __u64 ctx_handle = 0;
+  bpf_probe_read_user(&ctx_handle, sizeof(ctx_handle), (void *)pctx_ptr);
+  if (ctx_handle) {
+    bpf_map_update_elem(&tid2ctx, &tid, &ctx_handle, BPF_ANY);
+  }
+  return 0;
+}
 
 SEC("uprobe/cuMemAlloc")
 int trace_cu_mem_alloc_entry(struct pt_regs *ctx) {
@@ -93,6 +231,10 @@ int trace_malloc_return(struct pt_regs *ctx) {
   __u32 sid = bpf_get_stackid(ctx, &stack_traces, BPF_F_USER_STACK);
 
   int retval = PT_REGS_RC(ctx);
+  if (retval != 0) {
+    goto cleanup;
+    return 0;
+  }
   struct alloc_info_t *info;
   struct alloc_event *event;
   info = bpf_map_lookup_elem(&inflight, &pid_tgid);
@@ -100,18 +242,28 @@ int trace_malloc_return(struct pt_regs *ctx) {
     bpf_printk("cuMemAlloc return: pid_tgid=%llu no inflight alloc", pid_tgid);
     return 0;
   }
+  __s32 dev = -1;
+  __u64 *ctx_handle = bpf_map_lookup_elem(&tid2ctx, &tid);
+  if (ctx_handle) {
+    __s32 *pdev = bpf_map_lookup_elem(&ctx2dev, ctx_handle);
+    if (pdev)
+      dev = *pdev;
+  }
+
   // Read value from *dptr
   CUdeviceptr real_dptr;
   bpf_probe_read_user(&real_dptr, sizeof(real_dptr),
                       (const void *)info->dptr_addr);
-  bpf_printk("cuMemAlloc return: pid=%u, sid=%d size=%llu, dptr_addr=0x%llx",
-             pid, sid, info->size, real_dptr);
+  bpf_printk("cuMemAlloc return: pid=%u, sid=%d, device=%d, size=%llu, "
+             "dptr_addr=0x%llx",
+             pid, sid, dev, info->size, real_dptr);
   event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
   if (!event)
     goto cleanup;
 
   event->pid = pid;
   event->tid = tid;
+  event->device = dev;
   event->uid = uid;
   event->stack_id = sid;
   event->size = info->size;
