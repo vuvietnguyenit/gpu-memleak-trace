@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/spf13/cobra"
 )
@@ -78,23 +79,44 @@ func appRun() {
 	if err != nil {
 		log.Fatalf("opening executable: %s", err)
 	}
-	mallocSym, err := ex.Uprobe("cuMemAlloc_v2", objs.TraceCuMemAllocEntry, nil)
-	if err != nil {
-		log.Fatalf("attach malloc enter: %v", err)
-	}
-	defer mallocSym.Close()
 
-	mallocRetSym, err := ex.Uretprobe("cuMemAlloc_v2", objs.TraceMallocReturn, nil)
-	if err != nil {
-		log.Fatalf("attach malloc exit: %v", err)
+	// Attach uprobes/uretprobes to libcuda symbols
+	var links []link.Link
+	attach := func(sym string, prog *ebpf.Program, isRet bool) {
+		var l link.Link
+		var err error
+		if isRet {
+			l, err = ex.Uretprobe(sym, prog, nil)
+		} else {
+			l, err = ex.Uprobe(sym, prog, nil)
+		}
+		if err != nil {
+			log.Fatalf("attach %s ret=%v: %v", sym, isRet, err)
+		}
+		links = append(links, l)
 	}
-	defer mallocRetSym.Close()
+	// Context management
+	attach("cuCtxCreate", objs.UpCuCtxCreate, false)
+	attach("cuCtxCreate", objs.UrCuCtxCreate, true)
+	attach("cuDevicePrimaryCtxRetain", objs.UpCuDevicePrimaryCtxRetain, false)
+	attach("cuDevicePrimaryCtxRetain", objs.UrCuDevicePrimaryCtxRetain, true)
+	attach("cuCtxSetCurrent", objs.UpCuCtxSetCurrent, false)
+	attach("cuCtxPushCurrent", objs.UpCuCtxPushCurrent, false)
+	attach("cuCtxPopCurrent", objs.UrCuCtxPopCurrent, true)
 
-	freeRetSym, err := ex.Uprobe("cuMemFree_v2", objs.TraceCuMemFree, nil)
-	if err != nil {
-		log.Fatalf("attach free exit: %v", err)
-	}
-	defer freeRetSym.Close()
+	// Memory actions
+	attach("cuMemAlloc", objs.TraceCuMemAllocEntry, false)
+	attach("cuMemAlloc", objs.TraceMallocReturn, true)
+	attach("cuMemAlloc_v2", objs.TraceCuMemAllocEntry, false)
+	attach("cuMemAlloc_v2", objs.TraceMallocReturn, true)
+	attach("cuMemFree", objs.TraceCuMemFree, false)
+	attach("cuMemFree_v2", objs.TraceCuMemFree, false)
+
+	defer func() {
+		for _, l := range links {
+			_ = l.Close()
+		}
+	}()
 
 	log.Println("eBPF program running... Press Ctrl+C to exit.")
 
