@@ -17,7 +17,7 @@ type Row struct {
 	Dptr  string
 	Tid   uint32
 	Sid   uint32
-	Total Size
+	Total AllocSize
 }
 
 type Header string
@@ -36,7 +36,7 @@ func (df *DF) Insert(r Row) {
 }
 
 type Agg struct {
-	total Size
+	total AllocSize
 	comms map[string]struct{}
 	dptrs map[string]struct{}
 	tids  map[string]struct{}
@@ -91,10 +91,6 @@ func (gr Grouped) Print() {
 		fmt.Println("DPTR:")
 		for d := range g.dptrs {
 			fmt.Printf("  %s\n", d)
-		}
-		fmt.Println("TID:")
-		for t := range g.tids {
-			fmt.Printf("  %s\n", t)
 		}
 		fmt.Println("SID:")
 		for s := range g.sids {

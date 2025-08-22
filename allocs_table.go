@@ -13,7 +13,7 @@ import (
 
 type Dptr uint64
 
-type Size uint64
+type AllocSize uint64
 
 type AllocTable struct {
 	mu    sync.Mutex
@@ -28,7 +28,7 @@ type AllocKey struct {
 }
 
 type AllocEntry struct {
-	Size  Size
+	Size  AllocSize
 	Stack *StackInfo
 }
 
@@ -78,7 +78,7 @@ func (t *AllocTable) Cleanup(ctx context.Context) {
 }
 
 // Human-readable format for size
-func (s Size) HumanSize() string {
+func (s AllocSize) HumanSize() string {
 	val := float64(s)
 	units := []string{"B", "KB", "MB", "GB", "TB"}
 	i := 0
@@ -109,7 +109,7 @@ func (t *AllocTable) Alloc(e Event) {
 	key := AllocKey{TID: e.Tid, PID: e.Pid, Ptr: Dptr(e.Dptr)}
 
 	t.data[key] = &AllocEntry{
-		Size:  Size(e.Size),
+		Size:  AllocSize(e.Size),
 		Stack: s,
 	}
 	// Insert to index
