@@ -8,9 +8,9 @@ import (
 )
 
 type ProcessInfo struct {
-	PID  uint32
-	Comm [16]byte
-	UID  uint32
+	PID  Pid
+	Comm Comm
+	UID  Uid
 }
 
 // Get full command by PID

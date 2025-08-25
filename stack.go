@@ -4,7 +4,7 @@ import "fmt"
 
 type StackInfo struct {
 	T   *ThreadInfo
-	SID uint32
+	SID StackID
 }
 
 func (s *StackInfo) QueryTraces() []string {

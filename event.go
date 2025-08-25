@@ -5,13 +5,6 @@ import (
 	"strings"
 )
 
-type EventType int32
-
-const (
-	EVENT_MALLOC EventType = 0
-	EVENT_FREE   EventType = 1
-)
-
 func (e EventType) String() string {
 	switch e {
 	case EVENT_MALLOC:
@@ -24,17 +17,17 @@ func (e EventType) String() string {
 }
 
 type Event struct {
-	Pid       uint32
-	Tid       uint32
-	DeivceID  uint32
-	Uid       uint32
-	StackID   uint32
+	Pid       Pid
+	Tid       Tid
+	DeivceID  DeivceID
+	Uid       Uid
+	StackID   StackID
 	_         uint32 // padding to make struct 64 bytes
-	Size      uint64
-	Dptr      uint64
-	Comm      [16]byte
+	Size      AllocSize
+	Dptr      Dptr
+	Comm      Comm
 	EventType EventType
-	Retval    int32
+	Retval    Retval
 }
 
 func (e Event) String() string {

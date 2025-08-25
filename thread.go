@@ -2,5 +2,5 @@ package main
 
 type ThreadInfo struct {
 	P   *ProcessInfo
-	TID uint32
+	TID Tid
 }
