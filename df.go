@@ -2,22 +2,20 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
-
-	"github.com/olekukonko/tablewriter"
-	"github.com/olekukonko/tablewriter/renderer"
-	"github.com/olekukonko/tablewriter/tw"
+	"slices"
+	"sort"
+	"sync"
 )
 
 type Row struct {
-	PID   uint32
-	Comm  [16]byte
-	Dptr  string
-	Tid   uint32
-	Sid   uint32
-	Total AllocSize
+	DeviceID DeivceID
+	Pid      Pid
+	Uid      Uid
+	Comm     Comm
+	Dptr     Dptr
+	Tid      Tid
+	Sid      StackID
+	Size     AllocSize
 }
 
 type Header string
@@ -35,91 +33,83 @@ func (df *DF) Insert(r Row) {
 	df.Rows = append(df.Rows, r)
 }
 
-type Agg struct {
-	total AllocSize
-	comms map[string]struct{}
-	dptrs map[string]struct{}
-	tids  map[string]struct{}
-	sids  map[string]struct{}
+type PtrInfo struct {
+	Dptr     Dptr
+	DeviceID DeivceID
+	Size     AllocSize
 }
 
-type Grouped struct {
-	Group map[uint32]*Agg
+type CommGroup struct {
+	Comm Comm
+	Tid  Tid
+	Ptrs []PtrInfo
 }
 
-func (g *Grouped) PrintTable() {
-	table := tablewriter.NewTable(os.Stdout, tablewriter.WithRenderer(renderer.NewBlueprint(tw.Rendition{
-		Settings: tw.Settings{Separators: tw.Separators{BetweenRows: tw.On}},
-	})))
-	table.Header([]string{"PID", "COMM", "SID", "TOTAL"})
+type Result struct {
+	Pid   Pid
+	Uid   Uid
+	Comms map[Tid]CommGroup
+	Total AllocSize
+}
 
-	for pid, agg := range g.Group {
-		// turn sets into joined strings with newlines
-		comms := strings.Join(setToSlice(agg.comms), "\n")
-		dptrs := strings.Join(setToSlice(agg.dptrs), "\n")
-		sids := strings.Join(setToSlice(agg.sids), "\n")
+func (df *DF) GroupAlloc() map[Pid]Result {
+	allocs := make(map[AllocKey]AllocSize)
+	names := make(map[AllocKey]Comm)
 
-		row := []string{
-			strconv.Itoa(int(pid)),
-			comms,
-			dptrs,
-			sids,
-			agg.total.HumanSize(),
-		}
-		table.Append(row)
+	for _, e := range df.Rows {
+		k := AllocKey{Pid: e.Pid, Uid: e.Uid, Tid: e.Tid, DeviceID: e.DeviceID, Dptr: e.Dptr}
+		allocs[k] += e.Size
+		names[k] = e.Comm
 	}
-	fmt.Print("\033[H\033[2J")
-	table.Render()
-}
 
-func setToSlice(m map[string]struct{}) []string {
-	out := []string{}
-	for k := range m {
-		out = append(out, k)
+	results := make(map[Pid]Result)
+
+	for k, size := range allocs {
+		r := results[k.Pid]
+		if r.Pid == 0 {
+			r = Result{Pid: k.Pid, Comms: make(map[Tid]CommGroup), Uid: k.Uid}
+		}
+		cg := r.Comms[k.Tid]
+		if cg.Tid == 0 {
+			cg = CommGroup{Comm: names[k], Tid: k.Tid}
+		}
+		cg.Ptrs = append(cg.Ptrs, PtrInfo{
+			Dptr:     k.Dptr,
+			DeviceID: k.DeviceID,
+			Size:     size,
+		})
+		r.Comms[k.Tid] = cg
+		r.Total += size
+		results[k.Pid] = r
 	}
-	return out
+	return results
+
 }
 
-func (gr Grouped) Print() {
-	// Print results
-	for pid, g := range gr.Group {
-		fmt.Printf("PID: %d\n", pid)
-		fmt.Println("COMM/TID:")
-		for c := range g.comms {
-			fmt.Printf("  %s\n", c)
-		}
-		fmt.Println("DPTR:")
-		for d := range g.dptrs {
-			fmt.Printf("  %s\n", d)
-		}
-		fmt.Println("SID:")
-		for s := range g.sids {
-			fmt.Printf("  %s\n", s)
-		}
+var mux sync.Mutex
 
-		fmt.Printf("TOTAL: %s\n", g.total.HumanSize())
-	}
-}
+func PrintResults(results map[Pid]Result) {
+	mux.Lock()
+	defer mux.Unlock()
+	for _, r := range results {
+		fmt.Printf("PID: %d / UID: %d\n", r.Pid, r.Uid)
 
-func (df *DF) GroupAlloc() *Grouped {
-	grouped := &Grouped{Group: make(map[uint32]*Agg)}
-	for _, r := range df.Rows {
-		if _, ok := grouped.Group[r.PID]; !ok {
-			grouped.Group[r.PID] = &Agg{
-				comms: make(map[string]struct{}),
-				dptrs: make(map[string]struct{}),
-				tids:  make(map[string]struct{}),
-				sids:  make(map[string]struct{}),
+		// sort by TID for stable output
+		tids := make([]Tid, 0, len(r.Comms))
+		for tid := range r.Comms {
+			tids = append(tids, tid)
+		}
+		slices.Sort(tids)
+		for _, tid := range tids {
+			cg := r.Comms[tid]
+			fmt.Printf("  %s:%d\n", cg.Comm, cg.Tid)
+			// sort pointers by address
+			sort.Slice(cg.Ptrs, func(i, j int) bool { return cg.Ptrs[i].Size > cg.Ptrs[j].Size })
+			for _, p := range cg.Ptrs {
+				fmt.Printf("    0x%x:gpu_%d: %s\n",
+					p.Dptr, p.DeviceID, p.Size.HumanSize())
 			}
 		}
-		g := grouped.Group[r.PID]
-
-		g.total += r.Total
-		g.comms[fmt.Sprintf("%s:%d", r.Comm, r.Tid)] = struct{}{}
-		g.dptrs[r.Dptr] = struct{}{}
-		g.tids[fmt.Sprintf("%d", r.Tid)] = struct{}{}
-		g.sids[fmt.Sprintf("%d", r.Sid)] = struct{}{}
+		fmt.Printf("\nTOTAL LEAKED: %s\n\n", r.Total.HumanSize())
 	}
-	return grouped
-
 }

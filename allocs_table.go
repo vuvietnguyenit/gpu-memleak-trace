@@ -11,10 +11,6 @@ import (
 	"time"
 )
 
-type Dptr uint64
-
-type AllocSize uint64
-
 type AllocTable struct {
 	mu    sync.Mutex
 	data  map[AllocKey]*AllocEntry
@@ -22,9 +18,11 @@ type AllocTable struct {
 }
 
 type AllocKey struct {
-	PID uint32
-	TID uint32
-	Ptr Dptr
+	DeviceID DeivceID
+	Uid      Uid
+	Pid      Pid
+	Tid      Tid
+	Dptr     Dptr
 }
 
 type AllocEntry struct {
@@ -32,7 +30,7 @@ type AllocEntry struct {
 	Stack *StackInfo
 }
 
-func pidTgid(pid, tid uint32) uint64 {
+func pidTgid(pid Pid, tid Tid) uint64 {
 	return (uint64(pid) << 32) | uint64(tid)
 }
 
@@ -77,17 +75,7 @@ func (t *AllocTable) Cleanup(ctx context.Context) {
 
 }
 
-// Human-readable format for size
-func (s AllocSize) HumanSize() string {
-	val := float64(s)
-	units := []string{"B", "KB", "MB", "GB", "TB"}
-	i := 0
-	for val >= 1024 && i < len(units)-1 {
-		val /= 1024
-		i++
-	}
-	return fmt.Sprintf("%.2f %s", val, units[i])
-}
+
 
 func (d Dptr) GPUInstance() string {
 	// TODO: integrate with CUDA driver, NVML, etc.
@@ -106,14 +94,14 @@ func (t *AllocTable) Alloc(e Event) {
 	th := &ThreadInfo{P: p, TID: e.Tid}
 	s := &StackInfo{T: th, SID: e.StackID}
 
-	key := AllocKey{TID: e.Tid, PID: e.Pid, Ptr: Dptr(e.Dptr)}
+	key := AllocKey{DeviceID: e.DeivceID, Tid: e.Tid, Pid: e.Pid, Dptr: e.Dptr, Uid: e.Uid}
 
 	t.data[key] = &AllocEntry{
 		Size:  AllocSize(e.Size),
 		Stack: s,
 	}
 	// Insert to index
-	h := pidTgid(key.PID, key.TID)
+	h := pidTgid(key.Pid, key.Tid)
 	if _, ok := t.index[h]; !ok {
 		t.index[h] = make(map[AllocKey]struct{})
 	}
@@ -124,24 +112,26 @@ func (t *AllocTable) Free(e Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	key := AllocKey{TID: e.Tid, PID: e.Pid, Ptr: Dptr(e.Dptr)}
+	key := AllocKey{DeviceID: e.DeivceID, Tid: e.Tid, Pid: e.Pid, Dptr: Dptr(e.Dptr)}
 	delete(t.data, key)
 }
 
-func (t *AllocTable) Aggregate() *Grouped {
+func (t *AllocTable) Aggregate() map[Pid]Result {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	df := &DF{}
-	df.InitHeader([]Header{"PID", "COMM", "DPTR", "TID", "SID", "TOTAL"})
+	df.InitHeader([]Header{"DEVICEID", "PID", "UID", "COMM", "DPTR", "TID", "SID", "TOTAL"})
 	for key, entry := range t.data {
 		df.Insert(Row{
-			PID:   key.PID,
-			Comm:  entry.Stack.T.P.Comm,
-			Dptr:  fmt.Sprintf("0x%x", key.Ptr),
-			Tid:   key.TID,
-			Sid:   entry.Stack.SID,
-			Total: entry.Size,
+			DeviceID: key.DeviceID,
+			Pid:      key.Pid,
+			Uid:      key.Uid,
+			Comm:     entry.Stack.T.P.Comm,
+			Dptr:     key.Dptr,
+			Tid:      key.Tid,
+			Sid:      entry.Stack.SID,
+			Size:     entry.Size,
 		})
 	}
 	return df.GroupAlloc()
@@ -158,12 +148,12 @@ func (t *AllocTable) Print(ctx context.Context) {
 			return
 		case <-ticker.C:
 			fmt.Println(strings.Repeat("-", 20), time.Now().Format(time.RFC3339), strings.Repeat("-", 20))
-			g := t.Aggregate()
-			if len(g.Group) == 0 {
+			r := t.Aggregate()
+			if len(r) == 0 {
 				fmt.Println("NO EVENT.")
 				continue
 			}
-			g.Print()
+			PrintResults(r)
 		}
 	}
 }
