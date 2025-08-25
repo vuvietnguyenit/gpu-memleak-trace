@@ -1,4 +1,4 @@
-module git.itim.vn/docker/gpu-memleak-trace
+module github.com/vuvietnguyenit/gpu-memleak-trace
 
 go 1.24.0
 
