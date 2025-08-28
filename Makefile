@@ -1,7 +1,8 @@
 ARCH := x86
 BINARY := gpu-memleak-trace
-SRC     := ./...
+SRC     := ./src
 BUILD   := ./bin
+GOSRC   := $(SRC)/go
 
 # Go related variables
 GO      ?= go
@@ -15,13 +16,13 @@ all: build
 # Generate eBPF code from .bpf.c
 bpf-gen:
 	@echo ">> Generate eBPF code from .bpf.c"
-	go generate $(GO_SRC)
+	go generate $(GOSRC)
 
 ## Build binary
 build: bpf-gen
 	@echo ">> Building $(BINARY)"
 	@mkdir -p $(BUILD)
-	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD)/$(BINARY) .
+	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BUILD)/$(BINARY) $(GOSRC)
 
 # Clean generated files
 clean:
