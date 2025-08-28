@@ -9,7 +9,7 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -target amd64 bpf ebpf/cuda_memleak_detection.bpf.c -- -I../headers
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -target amd64 bpf ../bpf/cuda_memleak_detection.bpf.c -- -I../headers
 
 func init() {
 	if err := rlimit.RemoveMemlock(); err != nil {
