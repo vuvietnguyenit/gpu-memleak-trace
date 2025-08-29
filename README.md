@@ -8,9 +8,9 @@ This tool helps diagnose GPU-related issues by tracing memory allocations and de
 ```shell
 root@gpu1 ~/gpu-memleak-trace (main)# make build 
 >> Generate eBPF code from .bpf.c
-go generate 
+go generate ./src/go
 >> Building gpu-memleak-trace
-go build  -ldflags "-s -w" -o ./bin/gpu-memleak-trace .
+go build  -ldflags "-s -w" -o ./bin/gpu-memleak-trace ./src/go
 root@gpu1 ~/gpu-memleak-trace (main)# 
 ```
 
