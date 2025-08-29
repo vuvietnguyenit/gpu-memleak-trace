@@ -173,3 +173,68 @@ PID: 2181102 / UID: 0
 
 TOTAL LEAKED: 142.00 MB
 ```
+
+
+## Test anomaly allocation
+This experiment simulates an anomaly allocation by running a process with multiple threads and specifying one thread as the anomaly thread. That thread will generate an anomalous allocation. The anomaly allocation has a very large size, and we can observe it when running a trace tool.
+
+```shell
+(.venv) root@gpu1 ~/gpu-memleak-trace (main)# python script/gpu_alloc_anomaly.py --device cuda:0 --threads 4 --iterations 20 --normal-mb 10 --anomaly-mb 2096 --anomaly-thread 0 --anomaly-iter 5
+```
+The script and arguments above, each normal allocation is 10 MB. However, one thread produces the anomaly allocation. This anomaly appears in thread T0 at iteration 5, with a size of 2096 MB.
+
+*Result*
+```
+Using device: cuda:0 (NVIDIA GeForce RTX 5090)
+...
+[MAIN after starting batch 3] allocated=120.00 MB, reserved=160.00 MB, peak=160.00 MB
+[T1 iter 4 (normal 10.0 MB)] allocated=140.00 MB, reserved=160.00 MB, peak=160.00 MB
+[T0 iter 4 (normal 10.0 MB)] allocated=130.00 MB, reserved=160.00 MB, peak=160.00 MB
+[T2 iter 4 (normal 10.0 MB)] allocated=130.00 MB, reserved=160.00 MB, peak=160.00 MB
+[T3 iter 4 (normal 10.0 MB)] allocated=120.00 MB, reserved=160.00 MB, peak=160.00 MB
+[MAIN after starting batch 4] allocated=120.00 MB, reserved=160.00 MB, peak=160.00 MB
+[T2 iter 5 (normal 10.0 MB)] allocated=140.00 MB, reserved=162.00 MB, peak=160.00 MB
+[T1 iter 5 (normal 10.0 MB)] allocated=130.00 MB, reserved=162.00 MB, peak=160.00 MB
+[T3 iter 5 (normal 10.0 MB)] allocated=120.00 MB, reserved=162.00 MB, peak=160.00 MB
+[MAIN after starting batch 5] allocated=120.00 MB, reserved=162.00 MB, peak=160.00 MB
+[T0 iter 5 (ANOMALY 2096.0 MB)] allocated=2.15 GB, reserved=2.21 GB, peak=2.16 GB // !!!
+[T3 iter 6 (normal 10.0 MB)] allocated=2.18 GB, reserved=2.21 GB, peak=2.19 GB
+[T0 iter 6 (normal 10.0 MB)] allocated=2.17 GB, reserved=2.21 GB, peak=2.19 GB
+[T1 iter 6 (normal 10.0 MB)] allocated=2.16 GB, reserved=2.21 GB, peak=2.19 GB[T2 iter 6 (normal 10.0 MB)] allocated=2.15 GB, reserved=2.21 GB, peak=2.19 GB
+...<truncated>
+[T3 iter 19 (normal 10.0 MB)] allocated=2.16 GB, reserved=2.21 GB, peak=2.20 GB
+[MAIN after starting batch 19] allocated=2.16 GB, reserved=2.21 GB, peak=2.20 GB
+Final CUDA memory stats:
+[FINAL] allocated=120.00 MB, reserved=2.21 GB, peak=2.20 GB
+```
+Trace result:
+
+Example:
+```text
+-------------------- 2025-08-29T14:51:05+07:00 --------------------
+PID: 61666 / UID: 0
+  python:61735
+    0x7a7720000000:gpu_0: 2.05 GB // Anomally allocation is here
+    0x7a77d7600000:gpu_0: 10.00 MB
+    0x7a77dd000000:gpu_0: 10.00 MB
+    0x7a77f1000000:gpu_0: 10.00 MB
+    0x7a77d9400000:gpu_0: 10.00 MB
+    0x7a77d5c00000:gpu_0: 2.00 MB
+  python:61736
+    0x7a77dc600000:gpu_0: 10.00 MB
+    0x7a77d8000000:gpu_0: 10.00 MB
+    0x7a77d8a00000:gpu_0: 10.00 MB
+    0x7a77f6e00000:gpu_0: 10.00 MB
+  python:61737
+    0x7a77f6400000:gpu_0: 10.00 MB
+    0x7a77d6c00000:gpu_0: 10.00 MB
+    0x7a77d9e00000:gpu_0: 10.00 MB
+    0x7a77db200000:gpu_0: 10.00 MB
+  python:61738
+    0x7a77d5200000:gpu_0: 10.00 MB
+    0x7a77da800000:gpu_0: 10.00 MB
+    0x7a77d6000000:gpu_0: 10.00 MB
+    0x7a77dbc00000:gpu_0: 10.00 MB
+
+TOTAL LEAKED: 2.21 GB
+```
