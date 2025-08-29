@@ -209,7 +209,6 @@ Final CUDA memory stats:
 ```
 Trace result:
 
-Example:
 ```text
 -------------------- 2025-08-29T14:51:05+07:00 --------------------
 PID: 61666 / UID: 0
