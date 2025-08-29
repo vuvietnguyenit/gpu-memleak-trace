@@ -1,6 +1,6 @@
 # GPU memleak trace
 
-GPU Memory Leak Diagnostic & Monitoring Tool
+GPU Memory Leak Diagnostic & Monitoring Tool based on eBPF
 
 This tool helps diagnose GPU-related issues by tracing memory allocations and deallocations in real time. It detects potential leaks, correlates them with process metadata (PID, user, command), and periodically reports statistics such as total leaked memory. The collected data can also be exported as Prometheus metrics.
 
@@ -8,9 +8,9 @@ This tool helps diagnose GPU-related issues by tracing memory allocations and de
 ```shell
 root@gpu1 ~/gpu-memleak-trace (main)# make build 
 >> Generate eBPF code from .bpf.c
-go generate 
+go generate ./src/go
 >> Building gpu-memleak-trace
-go build  -ldflags "-s -w" -o ./bin/gpu-memleak-trace .
+go build  -ldflags "-s -w" -o ./bin/gpu-memleak-trace ./src/go
 root@gpu1 ~/gpu-memleak-trace (main)# 
 ```
 
