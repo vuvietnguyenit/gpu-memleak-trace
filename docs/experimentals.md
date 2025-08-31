@@ -237,3 +237,90 @@ PID: 61666 / UID: 0
 
 TOTAL LEAKED: 2.21 GB
 ```
+
+
+## Test allocation only
+
+```shell
+(.venv) root@gpu1 ~/g/script (dev)# python memleak_stressor.py --mode torch --size 256MiB --device 0 --max-bytes 8GiB --interval 1
+
+[memleak] PID=976561 mode=torch size=256 MiB interval=1.0s
+[memleak] Will stop after max-bytes=8 GiB
+[memleak] iters=10 leaked=2 GiB elapsed=9.0s rate~284 MiB/s
+[memleak] iters=20 leaked=5 GiB elapsed=19.0s rate~269 MiB/s
+[memleak] iters=30 leaked=8 GiB elapsed=29.0s rate~265 MiB/s
+[memleak] Done. Total leaked ~ 8 GiB in 32 allocations.
+
+```
+*Result*
+
+```text
+-------------------- 2025-08-31T11:26:44+07:00 --------------------
+PID: 978486 / UID: 0
+  python:978486
+    0x7e6ae6000000:gpu_0: 256.00 MB
+    0x7e6ad6000000:gpu_0: 256.00 MB
+
+TOTAL LEAKED: 512.00 MB
+
+-------------------- 2025-08-31T11:26:46+07:00 --------------------
+PID: 978486 / UID: 0
+  python:978486
+    0x7e6ac6000000:gpu_0: 256.00 MB
+    0x7e6ab6000000:gpu_0: 256.00 MB
+    0x7e6ae6000000:gpu_0: 256.00 MB
+    0x7e6ad6000000:gpu_0: 256.00 MB
+
+TOTAL LEAKED: 1.00 GB
+
+-------------------- 2025-08-31T11:26:48+07:00 --------------------
+PID: 978486 / UID: 0
+  python:978486
+    0x7e6ab6000000:gpu_0: 256.00 MB
+    0x7e6aa6000000:gpu_0: 256.00 MB
+    0x7e6a96000000:gpu_0: 256.00 MB
+    0x7e6ae6000000:gpu_0: 256.00 MB
+    0x7e6ad6000000:gpu_0: 256.00 MB
+    0x7e6ac6000000:gpu_0: 256.00 MB
+
+TOTAL LEAKED: 1.50 GB
+
+...<truncated>
+-------------------- 2025-08-31T11:27:14+07:00 --------------------
+PID: 978486 / UID: 0
+  python:978486
+    0x7e6aa6000000:gpu_0: 256.00 MB
+    0x7e6ad6000000:gpu_0: 256.00 MB
+    0x7e6936000000:gpu_0: 256.00 MB
+    0x7e69a6000000:gpu_0: 256.00 MB
+    0x7e6a66000000:gpu_0: 256.00 MB
+    0x7e6a56000000:gpu_0: 256.00 MB
+    0x7e69d6000000:gpu_0: 256.00 MB
+    0x7e6ab6000000:gpu_0: 256.00 MB
+    0x7e6a36000000:gpu_0: 256.00 MB
+    0x7e6986000000:gpu_0: 256.00 MB
+    0x7e6ae6000000:gpu_0: 256.00 MB
+    0x7e6a96000000:gpu_0: 256.00 MB
+    0x7e6a76000000:gpu_0: 256.00 MB
+    0x7e69c6000000:gpu_0: 256.00 MB
+    0x7e69e6000000:gpu_0: 256.00 MB
+    0x7e69b6000000:gpu_0: 256.00 MB
+    0x7e6946000000:gpu_0: 256.00 MB
+    0x7e6926000000:gpu_0: 256.00 MB
+    0x7e6996000000:gpu_0: 256.00 MB
+    0x7e6966000000:gpu_0: 256.00 MB
+    0x7e68f6000000:gpu_0: 256.00 MB
+    0x7e6956000000:gpu_0: 256.00 MB
+    0x7e6a16000000:gpu_0: 256.00 MB
+    0x7e6916000000:gpu_0: 256.00 MB
+    0x7e6ac6000000:gpu_0: 256.00 MB
+    0x7e6a06000000:gpu_0: 256.00 MB
+    0x7e6a26000000:gpu_0: 256.00 MB
+    0x7e6a86000000:gpu_0: 256.00 MB
+    0x7e6976000000:gpu_0: 256.00 MB
+    0x7e6906000000:gpu_0: 256.00 MB
+    0x7e69f6000000:gpu_0: 256.00 MB
+    0x7e6a46000000:gpu_0: 256.00 MB
+
+TOTAL LEAKED: 8.00 GB
+```
