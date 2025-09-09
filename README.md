@@ -30,73 +30,18 @@ NO EVENT.
 When it run, if we have any leak allocated, the leaked result will be print to console.
 ***Example:***
 ```text
--------------------- 2025-08-25T15:45:33+07:00 --------------------
-PID: 2166793 / UID: 0
-  python:2166793
-    0x7d332a000000:gpu_0: 20.00 MB
-    0x7d332cc00000:gpu_0: 16.00 MB
-    0x7d332bc00000:gpu_0: 16.00 MB
-    0x7d331d400000:gpu_0: 8.00 MB
-    0x7d3343000000:gpu_0: 2.00 MB
-    0x7d331d200400:gpu_0: 128.00 KB
-    0x7d331d200000:gpu_0: 1.00 KB
-  pt_autograd_0:2167089
-    0x7d332b400000:gpu_0: 8.00 MB
-    0x7d331d220800:gpu_0: 128.00 KB
-    0x7d331d220400:gpu_0: 1.00 KB
+-------------------- 2025-09-09T17:17:26+07:00 --------------------
+PID: 1551384 / UID: 0
+  python:1551384 // **Followed by format:** `COMM:ThreadID`
+   [2025-09-09T17:17:26.310983268+07:00]  0x761564000000  gpu:0   allocated size:256.00 MB // **Followed by format:** `timestamp_allocated pointer device_id allocated_size`
+   [2025-09-09T17:17:25.310191069+07:00]  0x761574000000  gpu:0   allocated size:256.00 MB
+   [2025-09-09T17:17:24.309494050+07:00]  0x761584000000  gpu:0   allocated size:256.00 MB
+   [2025-09-09T17:17:23.308732492+07:00]  0x761594000000  gpu:0   allocated size:256.00 MB
+   [2025-09-09T17:17:22.308044564+07:00]  0x7615a4000000  gpu:0   allocated size:256.00 MB
+   [2025-09-09T17:17:21.307175606+07:00]  0x7615b4000000  gpu:0   allocated size:256.00 MB
+   [2025-09-09T17:17:20.306554487+07:00]  0x7615c4000000  gpu:0   allocated size:256.00 MB
 
-TOTAL LEAKED: 70.25 MB // Allocated total 70.25 MB in process 2166793 on GPU 0 (in this result doesn't include pointer from another GPU)
--------------------- 2025-08-25T15:45:35+07:00 --------------------
-PID: 2166793 / UID: 0
-  python:2166793
-    0x7d332a000000:gpu_0: 20.00 MB
-    0x7d332bc00000:gpu_0: 16.00 MB
-    0x7d332cc00000:gpu_0: 16.00 MB
-    0x7d331d400000:gpu_0: 8.00 MB
-    0x7d3343000000:gpu_0: 2.00 MB
-    0x7d331d200400:gpu_0: 128.00 KB
-    0x7d331d200000:gpu_0: 1.00 KB
-  pt_autograd_0:2167089
-    0x7d332b400000:gpu_0: 8.00 MB
-    0x7d331d220800:gpu_0: 128.00 KB
-    0x7d331d220400:gpu_0: 1.00 KB
-
-TOTAL LEAKED: 70.25 MB
-
--------------------- 2025-08-25T15:45:37+07:00 --------------------
-PID: 2166793 / UID: 0
-  python:2166793
-    0x7d332a000000:gpu_0: 20.00 MB
-    0x7d332cc00000:gpu_0: 16.00 MB
-    0x7d331d400000:gpu_0: 8.00 MB
-    0x7d3343000000:gpu_0: 2.00 MB
-    0x7d331d200400:gpu_0: 128.00 KB
-    0x7d331d200000:gpu_0: 1.00 KB
-  pt_autograd_0:2167089
-    0x7d332b400000:gpu_0: 8.00 MB
-    0x7d331d220800:gpu_0: 128.00 KB
-    0x7d331d220400:gpu_0: 1.00 KB
-
-TOTAL LEAKED: 54.25 MB // Freed 16.00 MB at pointer 0x7d332bc00000 (GPU 0), thread 2166793, at 2025-08-25T15:45:37+07:00
-```
-In the above example, we have many records, each corresponding to one PID (Process ID) in Linux. Basically, the record can be described as:
-
-```text
-PID: 2166793 / UID: 0 // PID/UID
-  python:2166793 // COMM:ThreadID
-    0x7d332a000000:gpu_0: 20.00 MB // Pointet:DeviceID:SizeAllocated
-    0x7d332cc00000:gpu_0: 16.00 MB
-    0x7d331d400000:gpu_0: 8.00 MB
-    0x7d3343000000:gpu_0: 2.00 MB
-    0x7d331d200400:gpu_0: 128.00 KB
-    0x7d331d200000:gpu_0: 1.00 KB
-  pt_autograd_0:2167089
-    0x7d332b400000:gpu_0: 8.00 MB
-    0x7d331d220800:gpu_0: 128.00 KB
-    0x7d331d220400:gpu_0: 1.00 KB
-
-TOTAL LEAKED: 54.25 MB // Total size leaked by process
-
+TOTAL LEAKED: 1.75 GB // Allocated total 1.75 GB in process 1551384 on GPU 0 (in this result doesn't include pointer from another GPU)
 ```
 If you want to have a better overall view of the trace tool, you need to see some test cases at: [Experimental](docs/experimentals.md)
 

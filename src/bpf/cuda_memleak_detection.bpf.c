@@ -24,6 +24,7 @@ char LICENSE[] SEC("license") = "GPL";
 struct alloc_info_t {
   u64 size;
   CUdeviceptr dptr_addr;
+  u64 ts_ns;
 };
 
 enum event_type {
@@ -42,6 +43,7 @@ struct alloc_event {
   char comm[16]; // <- command of proc
   enum event_type event_type;
   int retval;
+  u64 ts_ns;
 };
 
 struct ctx_new_tmp {
@@ -205,15 +207,19 @@ int trace_cu_mem_alloc_entry(struct pt_regs *ctx) {
   u64 pid_tgid = bpf_get_current_pid_tgid();
   CUdeviceptr *dptr_ptr = (CUdeviceptr *)PT_REGS_PARM1(ctx);
   u64 size = PT_REGS_PARM2(ctx);
+  u64 ts = bpf_ktime_get_ns();
+  bpf_printk("cuMemAlloc entry: pid_tgid=%llu size=%llu dptr_addr=0x%llx ts=%llu",
+             pid_tgid, size, (u64)dptr_ptr, ts);
   if (bpf_map_lookup_elem(&inflight, &pid_tgid)) {
     bpf_printk("cuMemAlloc entry: pid_tgid=%llu already has inflight alloc",
                pid_tgid);
     return 0;
   }
-  bpf_map_update_elem(
-      &inflight, &pid_tgid,
-      &(struct alloc_info_t){.size = size, .dptr_addr = (CUdeviceptr)dptr_ptr},
-      BPF_ANY);
+  bpf_map_update_elem(&inflight, &pid_tgid,
+                      &(struct alloc_info_t){.size = size,
+                                             .dptr_addr = (CUdeviceptr)dptr_ptr,
+                                             .ts_ns = bpf_ktime_get_ns()},
+                      BPF_ANY);
   return 0;
 }
 
@@ -266,6 +272,7 @@ int trace_malloc_return(struct pt_regs *ctx) {
   event->dptr = real_dptr; // CUdeviceptr dptr
   event->retval = PT_REGS_RC(ctx);
   event->event_type = EVENT_MALLOC;
+  event->ts_ns = info->ts_ns;
   bpf_get_current_comm(&event->comm, sizeof(event->comm));
   bpf_ringbuf_submit(event, 0);
 
@@ -298,6 +305,7 @@ int trace_cuMemFree(struct pt_regs *ctx) {
   e->tid = tid;
   e->uid = uid;
   e->retval = -1;
+  e->ts_ns = bpf_ktime_get_ns();
   bpf_get_current_comm(&e->comm, sizeof(e->comm));
   bpf_ringbuf_submit(e, 0);
   return 0;

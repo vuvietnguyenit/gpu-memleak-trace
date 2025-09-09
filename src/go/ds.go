@@ -17,6 +17,7 @@ type StackID uint32
 type Comm [16]byte
 type Tid uint32
 type Retval int32
+type Timestamp uint64
 
 // Human-readable format for size
 func (s AllocSize) HumanSize() string {
