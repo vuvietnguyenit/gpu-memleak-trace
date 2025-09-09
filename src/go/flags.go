@@ -3,12 +3,9 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 func validateFlags() error {
@@ -23,22 +20,6 @@ func validateFlags() error {
 	}
 
 	return nil
-}
-
-func parseIntervalFlag(name string) time.Duration {
-	raw := pflag.Lookup(name).Value.String()
-	if strings.HasSuffix(raw, "s") || strings.HasSuffix(raw, "m") || strings.HasSuffix(raw, "h") {
-		if dur, err := time.ParseDuration(raw); err == nil {
-			return dur
-		}
-	}
-	if sec, err := strconv.Atoi(raw); err == nil {
-		return time.Duration(sec) * time.Second
-	}
-	if dur, err := time.ParseDuration(raw); err == nil {
-		return dur
-	}
-	return 0
 }
 
 func addProdFlags(cmd *cobra.Command) {

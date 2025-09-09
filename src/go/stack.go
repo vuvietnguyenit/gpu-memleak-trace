@@ -1,6 +1,8 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type StackInfo struct {
 	T   *ThreadInfo

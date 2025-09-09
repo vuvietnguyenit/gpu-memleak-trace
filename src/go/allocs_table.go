@@ -26,8 +26,9 @@ type AllocKey struct {
 }
 
 type AllocEntry struct {
-	Size  AllocSize
-	Stack *StackInfo
+	Size      AllocSize
+	Stack     *StackInfo
+	Timestamp Timestamp
 }
 
 func pidTgid(pid Pid, tid Tid) uint64 {
@@ -75,8 +76,6 @@ func (t *AllocTable) Cleanup(ctx context.Context) {
 
 }
 
-
-
 func (d Dptr) GPUInstance() string {
 	// TODO: integrate with CUDA driver, NVML, etc.
 	return fmt.Sprintf("GPU instance for Dptr=0x%x", uint64(d))
@@ -97,8 +96,9 @@ func (t *AllocTable) Alloc(e Event) {
 	key := AllocKey{DeviceID: e.DeivceID, Tid: e.Tid, Pid: e.Pid, Dptr: e.Dptr, Uid: e.Uid}
 
 	t.data[key] = &AllocEntry{
-		Size:  AllocSize(e.Size),
-		Stack: s,
+		Size:      AllocSize(e.Size),
+		Timestamp: e.TsNs,
+		Stack:     s,
 	}
 	// Insert to index
 	h := pidTgid(key.Pid, key.Tid)
@@ -121,17 +121,18 @@ func (t *AllocTable) Aggregate() map[Pid]Result {
 	defer t.mu.Unlock()
 
 	df := &DF{}
-	df.InitHeader([]Header{"DEVICEID", "PID", "UID", "COMM", "DPTR", "TID", "SID", "TOTAL"})
+	df.InitHeader([]Header{"TS", "DEVICEID", "PID", "UID", "COMM", "DPTR", "TID", "SID", "TOTAL"})
 	for key, entry := range t.data {
 		df.Insert(Row{
-			DeviceID: key.DeviceID,
-			Pid:      key.Pid,
-			Uid:      key.Uid,
-			Comm:     entry.Stack.T.P.Comm,
-			Dptr:     key.Dptr,
-			Tid:      key.Tid,
-			Sid:      entry.Stack.SID,
-			Size:     entry.Size,
+			Timestamp: entry.Timestamp,
+			DeviceID:  key.DeviceID,
+			Pid:       key.Pid,
+			Uid:       key.Uid,
+			Comm:      entry.Stack.T.P.Comm,
+			Dptr:      key.Dptr,
+			Tid:       key.Tid,
+			Sid:       entry.Stack.SID,
+			Size:      entry.Size,
 		})
 	}
 	return df.GroupAlloc()

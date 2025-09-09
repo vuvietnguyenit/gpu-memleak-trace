@@ -22,12 +22,13 @@ type Event struct {
 	DeivceID  DeivceID
 	Uid       Uid
 	StackID   StackID
-	_         uint32 // padding to make struct 64 bytes
+	_         [4]byte // padding
 	Size      AllocSize
 	Dptr      Dptr
 	Comm      Comm
 	EventType EventType
 	Retval    Retval
+	TsNs      Timestamp
 }
 
 func (e Event) String() string {
