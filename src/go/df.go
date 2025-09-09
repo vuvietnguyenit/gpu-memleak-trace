@@ -8,14 +8,15 @@ import (
 )
 
 type Row struct {
-	DeviceID DeivceID
-	Pid      Pid
-	Uid      Uid
-	Comm     Comm
-	Dptr     Dptr
-	Tid      Tid
-	Sid      StackID
-	Size     AllocSize
+	Timestamp Timestamp
+	DeviceID  DeivceID
+	Pid       Pid
+	Uid       Uid
+	Comm      Comm
+	Dptr      Dptr
+	Tid       Tid
+	Sid       StackID
+	Size      AllocSize
 }
 
 type Header string
@@ -33,16 +34,17 @@ func (df *DF) Insert(r Row) {
 	df.Rows = append(df.Rows, r)
 }
 
-type PtrInfo struct {
-	Dptr     Dptr
-	DeviceID DeivceID
-	Size     AllocSize
+type PtrAllocateInfo struct {
+	Dptr      Dptr
+	DeviceID  DeivceID
+	Size      AllocSize
+	Timestamp Timestamp
 }
 
 type CommGroup struct {
 	Comm Comm
 	Tid  Tid
-	Ptrs []PtrInfo
+	Ptrs []PtrAllocateInfo
 }
 
 type Result struct {
@@ -52,19 +54,24 @@ type Result struct {
 	Total AllocSize
 }
 
+type AllocValue struct {
+	Size      AllocSize
+	Timestamp Timestamp
+}
+
 func (df *DF) GroupAlloc() map[Pid]Result {
-	allocs := make(map[AllocKey]AllocSize)
+	allocs := make(map[AllocKey]AllocValue)
 	names := make(map[AllocKey]Comm)
 
 	for _, e := range df.Rows {
 		k := AllocKey{Pid: e.Pid, Uid: e.Uid, Tid: e.Tid, DeviceID: e.DeviceID, Dptr: e.Dptr}
-		allocs[k] += e.Size
+		allocs[k] = AllocValue{Size: allocs[k].Size + e.Size, Timestamp: e.Timestamp}
 		names[k] = e.Comm
 	}
 
 	results := make(map[Pid]Result)
 
-	for k, size := range allocs {
+	for k, v := range allocs {
 		r := results[k.Pid]
 		if r.Pid == 0 {
 			r = Result{Pid: k.Pid, Comms: make(map[Tid]CommGroup), Uid: k.Uid}
@@ -73,17 +80,18 @@ func (df *DF) GroupAlloc() map[Pid]Result {
 		if cg.Tid == 0 {
 			cg = CommGroup{Comm: names[k], Tid: k.Tid}
 		}
-		cg.Ptrs = append(cg.Ptrs, PtrInfo{
-			Dptr:     k.Dptr,
-			DeviceID: k.DeviceID,
-			Size:     size,
+		cg.Ptrs = append(cg.Ptrs, PtrAllocateInfo{
+			Dptr:      k.Dptr,
+			DeviceID:  k.DeviceID,
+			Size:      v.Size,
+			Timestamp: v.Timestamp,
 		})
+		// You can add Timestamp to PtrInfo if needed
 		r.Comms[k.Tid] = cg
-		r.Total += size
+		r.Total += v.Size
 		results[k.Pid] = r
 	}
 	return results
-
 }
 
 var mux sync.Mutex
@@ -103,11 +111,15 @@ func PrintResults(results map[Pid]Result) {
 		for _, tid := range tids {
 			cg := r.Comms[tid]
 			fmt.Printf("  %s:%d\n", cg.Comm, cg.Tid)
-			// sort pointers by address
-			sort.Slice(cg.Ptrs, func(i, j int) bool { return cg.Ptrs[i].Size > cg.Ptrs[j].Size })
+			// sort pointers by timestamp
+			sort.Slice(cg.Ptrs, func(i, j int) bool { return Timestamp(cg.Ptrs[i].Timestamp) > cg.Ptrs[j].Timestamp })
 			for _, p := range cg.Ptrs {
-				fmt.Printf("    0x%x:gpu_%d: %s\n",
-					p.Dptr, p.DeviceID, p.Size.HumanSize())
+				fmt.Printf("   [%s]  %-14s  %-6s  %8s\n",
+					KtimeToTime(p.Timestamp).Format("2006-01-02T15:04:05.000000000Z07:00"),
+					fmt.Sprintf("0x%012x", p.Dptr),
+					fmt.Sprintf("gpu:%v", p.DeviceID),
+					fmt.Sprintf("allocated size:%s", p.Size.HumanSize()),
+				)
 			}
 		}
 		fmt.Printf("\nTOTAL LEAKED: %s\n\n", r.Total.HumanSize())
