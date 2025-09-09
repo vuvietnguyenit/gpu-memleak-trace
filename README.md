@@ -2,7 +2,11 @@
 
 GPU Memory Leak Diagnostic & Monitoring Tool based on eBPF
 
-This tool helps diagnose GPU-related issues by tracing memory allocations and deallocations in real time. It detects potential leaks, correlates them with process metadata (PID, user, command), and periodically reports statistics such as total leaked memory. The collected data can also be exported as Prometheus metrics.
+This tool helps diagnose GPU-related issues by tracing memory allocations and deallocations in real time. It detects potential leaks, correlates them with process metadata (PID, user, command), and periodically reports statistics such as total leaked memory.
+
+## Features
+- Multi-GPU aware: Traces allocations across all GPUs on a node, not just a single device, making it suitable for modern multi-GPU servers.
+- Real-time leak detection with process context.
 
 ## Build
 ```shell
