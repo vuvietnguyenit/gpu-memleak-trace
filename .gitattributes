@@ -1,0 +1,2 @@
+src/bpf/include/* linguist-detectable=false
+src/bpf/vmlinux.h linguist-detectable=false
