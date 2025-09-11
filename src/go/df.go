@@ -15,7 +15,6 @@ type Row struct {
 	Comm      Comm
 	Dptr      Dptr
 	Tid       Tid
-	Sid       StackID
 	Size      AllocSize
 }
 

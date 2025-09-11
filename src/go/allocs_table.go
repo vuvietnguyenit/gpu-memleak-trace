@@ -21,13 +21,13 @@ type AllocKey struct {
 	DeviceID DeivceID
 	Uid      Uid
 	Pid      Pid
+	Comm     Comm
 	Tid      Tid
 	Dptr     Dptr
 }
 
 type AllocEntry struct {
 	Size      AllocSize
-	Stack     *StackInfo
 	Timestamp Timestamp
 }
 
@@ -85,20 +85,18 @@ func (t *AllocTable) Alloc(e Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	p := &ProcessInfo{
-		PID:  e.Pid,
-		Comm: e.Comm,
-		UID:  e.Uid,
+	key := AllocKey{
+		DeviceID: e.DeivceID,
+		Tid:      e.Tid,
+		Pid:      e.Pid,
+		Comm:     e.Comm,
+		Dptr:     e.Dptr,
+		Uid:      e.Uid,
 	}
-	th := &ThreadInfo{P: p, TID: e.Tid}
-	s := &StackInfo{T: th, SID: e.StackID}
-
-	key := AllocKey{DeviceID: e.DeivceID, Tid: e.Tid, Pid: e.Pid, Dptr: e.Dptr, Uid: e.Uid}
 
 	t.data[key] = &AllocEntry{
 		Size:      AllocSize(e.Size),
 		Timestamp: e.TsNs,
-		Stack:     s,
 	}
 	// Insert to index
 	h := pidTgid(key.Pid, key.Tid)
@@ -112,7 +110,12 @@ func (t *AllocTable) Free(e Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	key := AllocKey{DeviceID: e.DeivceID, Tid: e.Tid, Pid: e.Pid, Dptr: Dptr(e.Dptr)}
+	key := AllocKey{
+		DeviceID: e.DeivceID,
+		Tid:      e.Tid,
+		Pid:      e.Pid,
+		Dptr:     Dptr(e.Dptr),
+	}
 	delete(t.data, key)
 }
 
@@ -121,17 +124,16 @@ func (t *AllocTable) Aggregate() map[Pid]Result {
 	defer t.mu.Unlock()
 
 	df := &DF{}
-	df.InitHeader([]Header{"TS", "DEVICEID", "PID", "UID", "COMM", "DPTR", "TID", "SID", "TOTAL"})
+	df.InitHeader([]Header{"TS", "DEVICEID", "PID", "UID", "COMM", "DPTR", "TID", "TOTAL"})
 	for key, entry := range t.data {
 		df.Insert(Row{
 			Timestamp: entry.Timestamp,
 			DeviceID:  key.DeviceID,
 			Pid:       key.Pid,
 			Uid:       key.Uid,
-			Comm:      entry.Stack.T.P.Comm,
+			Comm:      key.Comm,
 			Dptr:      key.Dptr,
 			Tid:       key.Tid,
-			Sid:       entry.Stack.SID,
 			Size:      entry.Size,
 		})
 	}
