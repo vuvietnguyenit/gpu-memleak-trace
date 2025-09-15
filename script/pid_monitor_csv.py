@@ -4,22 +4,21 @@ pid_monitor_csv.py
 
 Monitor CPU, memory, and disk I/O usage for specific PIDs.
 Prints results as CSV lines (PID, name, CPU%, memory_MB, memory%, disk_read_KB, disk_write_KB).
-
-Usage:
-    python pid_monitor_csv.py --pids 1234 5678 --interval 1 --output metrics.csv
 """
 
 import argparse
 import time
 import psutil
-import sys
+import os
 
 
-def print_header(file=None):
-    header = "timestamp,pid,name,cpu_percent,memory_mb,memory_percent,disk_read_kb,disk_write_kb"
-    print(header)
-    if file:
-        file.write(header + "\n")
+HEADER = "timestamp,pid,name,cpu_percent,memory_mb,memory_percent,disk_read_kb,disk_write_kb"
+
+
+def print_header(file):
+    """Write header only if file is empty."""
+    if os.stat(file.name).st_size == 0:
+        file.write(HEADER + "\n")
         file.flush()
 
 
@@ -28,7 +27,7 @@ def print_metrics(pids, interval, file=None):
     for pid in pids:
         try:
             p = psutil.Process(pid)
-            cpu = p.cpu_percent(interval=interval)   # accurate, like `top`
+            cpu = p.cpu_percent(interval=interval)  # accurate, like `top`
             mem = p.memory_info().rss / (1024 * 1024)
             mem_percent = p.memory_percent()
             io = p.io_counters()
@@ -60,10 +59,11 @@ def main():
 
     file = None
     if args.output:
-        file = open(args.output, "w")
+        # Open in append mode
+        file = open(args.output, "a")
+        print_header(file)
 
     try:
-        print_header(file)
         while True:
             print_metrics(args.pids, args.interval, file)
     except KeyboardInterrupt:
