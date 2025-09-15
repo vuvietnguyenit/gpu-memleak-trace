@@ -72,6 +72,7 @@ GPU 0: NVIDIA GeForce RTX 5090 (UUID: GPU-47def375-4603-e5fa-82d3-c7cddc81e65a)
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from tabulate import tabulate
 ```
 
 ## Run stressor
@@ -110,106 +111,17 @@ python pid_mon.py --pids <PID> --interval 0.2 --output=../sample/spammer.csv
 from datetime import datetime
 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
 df = pd.read_csv('../sample/metrics.csv', parse_dates=["timestamp"]).query("name=='gpu-memleak-trace'")
-df.head()
+print(tabulate(df.head(), headers="keys", tablefmt="github"))
 ```
 
-```{=html}
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-```
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
+    |    | timestamp                  | description                                             |     pid | name              |   cpu_percent |   memory_mb |   memory_percent |   disk_read_kb |   disk_write_kb |
+    |----|----------------------------|---------------------------------------------------------|---------|-------------------|---------------|-------------|------------------|----------------|-----------------|
+    |  1 | 2025-09-15 17:01:05.038128 | --throughput 1000 --allocate-size 2048 --free-ratio 1.0 | 1258836 | gpu-memleak-trace |             5 |        80.3 |              0.1 |           50.9 |               0 |
+    |  3 | 2025-09-15 17:01:05.439754 | --throughput 1000 --allocate-size 2048 --free-ratio 1.0 | 1258836 | gpu-memleak-trace |            10 |        80.8 |              0.1 |           50.9 |               0 |
+    |  5 | 2025-09-15 17:01:05.840861 | --throughput 1000 --allocate-size 2048 --free-ratio 1.0 | 1258836 | gpu-memleak-trace |            10 |        80.8 |              0.1 |           50.9 |               0 |
+    |  7 | 2025-09-15 17:01:06.241972 | --throughput 1000 --allocate-size 2048 --free-ratio 1.0 | 1258836 | gpu-memleak-trace |            10 |        80.8 |              0.1 |           50.9 |               0 |
+    |  9 | 2025-09-15 17:01:06.643099 | --throughput 1000 --allocate-size 2048 --free-ratio 1.0 | 1258836 | gpu-memleak-trace |             5 |        80.8 |              0.1 |           50.9 |               0 |
 
-    .dataframe thead th {
-        text-align: right;
-    }
-
-```{=html}
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>timestamp</th>
-      <th>description</th>
-      <th>pid</th>
-      <th>name</th>
-      <th>cpu_percent</th>
-      <th>memory_mb</th>
-      <th>memory_percent</th>
-      <th>disk_read_kb</th>
-      <th>disk_write_kb</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>1</th>
-      <td>2025-09-15 17:01:05.038128</td>
-      <td>--throughput 1000 --allocate-size 2048 --free-...</td>
-      <td>1258836</td>
-      <td>gpu-memleak-trace</td>
-      <td>5.0</td>
-      <td>80.3</td>
-      <td>0.1</td>
-      <td>50.9</td>
-      <td>0.0</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>2025-09-15 17:01:05.439754</td>
-      <td>--throughput 1000 --allocate-size 2048 --free-...</td>
-      <td>1258836</td>
-      <td>gpu-memleak-trace</td>
-      <td>10.0</td>
-      <td>80.8</td>
-      <td>0.1</td>
-      <td>50.9</td>
-      <td>0.0</td>
-    </tr>
-    <tr>
-      <th>5</th>
-      <td>2025-09-15 17:01:05.840861</td>
-      <td>--throughput 1000 --allocate-size 2048 --free-...</td>
-      <td>1258836</td>
-      <td>gpu-memleak-trace</td>
-      <td>10.0</td>
-      <td>80.8</td>
-      <td>0.1</td>
-      <td>50.9</td>
-      <td>0.0</td>
-    </tr>
-    <tr>
-      <th>7</th>
-      <td>2025-09-15 17:01:06.241972</td>
-      <td>--throughput 1000 --allocate-size 2048 --free-...</td>
-      <td>1258836</td>
-      <td>gpu-memleak-trace</td>
-      <td>10.0</td>
-      <td>80.8</td>
-      <td>0.1</td>
-      <td>50.9</td>
-      <td>0.0</td>
-    </tr>
-    <tr>
-      <th>9</th>
-      <td>2025-09-15 17:01:06.643099</td>
-      <td>--throughput 1000 --allocate-size 2048 --free-...</td>
-      <td>1258836</td>
-      <td>gpu-memleak-trace</td>
-      <td>5.0</td>
-      <td>80.8</td>
-      <td>0.1</td>
-      <td>50.9</td>
-      <td>0.0</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-```
 ``` python
 df.groupby(['pid', 'name', 'description'])['cpu_percent'].plot(figsize=(18, 6), grid=True, legend=True, ylabel='CPU %', title='CPU Usage Over Time')
 ```
