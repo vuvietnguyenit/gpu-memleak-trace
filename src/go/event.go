@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 )
 
 func (e EventType) String() string {
@@ -19,10 +18,8 @@ func (e EventType) String() string {
 type Event struct {
 	Pid       Pid
 	Tid       Tid
-	DeivceID  DeivceID
+	DeviceID  DeviceID
 	Uid       Uid
-	StackID   StackID
-	_         [4]byte // padding
 	Size      AllocSize
 	Dptr      Dptr
 	Comm      Comm
@@ -31,21 +28,21 @@ type Event struct {
 	TsNs      Timestamp
 }
 
-func (e Event) String() string {
-	comm := strings.TrimRight(string(e.Comm[:]), "\x00")
+// func (e Event) String() string {
+// 	comm := strings.TrimRight(string(e.Comm[:]), "\x00")
 
-	switch e.EventType {
-	case EVENT_MALLOC:
-		return fmt.Sprintf(
-			"[MALLOC] pid=%d tid=%d uid=%d comm=%s size=%d dptr=0x%x stack_id=%d retval=%d",
-			e.Pid, e.Tid, e.Uid, comm, e.Size, e.Dptr, e.StackID, e.Retval,
-		)
-	case EVENT_FREE:
-		return fmt.Sprintf(
-			"[FREE]   pid=%d tid=%d uid=%d comm=%s dptr=0x%x stack_id=%d retval=%d",
-			e.Pid, e.Tid, e.Uid, comm, e.Dptr, e.StackID, e.Retval,
-		)
-	default:
-		return "[UNKNOWN]"
-	}
-}
+// 	switch e.EventType {
+// 	case EVENT_MALLOC:
+// 		return fmt.Sprintf(
+// 			"[MALLOC] pid=%d tid=%d uid=%d comm=%s size=%d dptr=0x%x stack_id=%d retval=%d",
+// 			e.Pid, e.Tid, e.Uid, comm, e.Size, e.Dptr, e.StackID, e.Retval,
+// 		)
+// 	case EVENT_FREE:
+// 		return fmt.Sprintf(
+// 			"[FREE]   pid=%d tid=%d uid=%d comm=%s dptr=0x%x stack_id=%d retval=%d",
+// 			e.Pid, e.Tid, e.Uid, comm, e.Dptr, e.StackID, e.Retval,
+// 		)
+// 	default:
+// 		return "[UNKNOWN]"
+// 	}
+// }

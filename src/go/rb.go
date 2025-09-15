@@ -16,7 +16,7 @@ import (
 
 type RingBuffer struct {
 	Event       *ebpf.Map
-	AllocsTable *AllocTable
+	AllocsTable *AllocateTable
 }
 
 func (r *RingBuffer) RbReserve(ctx context.Context) {
@@ -76,10 +76,10 @@ func (r *RingBuffer) RbReserve(ctx context.Context) {
 
 }
 
-func (r *RingBuffer) handleEvent(ta *AllocTable, ev Event) {
+func (r *RingBuffer) handleEvent(ta *AllocateTable, ev Event) {
 	switch ev.EventType {
 	case EVENT_MALLOC:
-		ta.Alloc(ev)
+		ta.Malloc(ev)
 	case EVENT_FREE:
 		ta.Free(ev)
 	default:

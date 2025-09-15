@@ -6,29 +6,28 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
 
 type AllocTable struct {
-	mu    sync.Mutex
+	mu    sync.RWMutex
 	data  map[AllocKey]*AllocEntry
 	index map[uint64]map[AllocKey]struct{}
 }
 
 type AllocKey struct {
-	DeviceID DeivceID
+	DeviceID DeviceID
 	Uid      Uid
 	Pid      Pid
+	Comm     Comm
 	Tid      Tid
-	Dptr     Dptr
 }
 
 type AllocEntry struct {
-	Size      AllocSize
-	Stack     *StackInfo
-	Timestamp Timestamp
+	Size      AllocSize // allocated size
+	TotalSize AllocSize // accumulated size
+	LastTs    Timestamp // last allocation timestamp
 }
 
 func pidTgid(pid Pid, tid Tid) uint64 {
@@ -57,6 +56,7 @@ func (t *AllocTable) Cleanup(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			t.mu.Lock()
 			for h, set := range t.index {
 				// hash -> all AllocKeys with same (PID,TID)
 				var pid, tid uint32
@@ -71,6 +71,7 @@ func (t *AllocTable) Cleanup(ctx context.Context) {
 					delete(t.index, h)
 				}
 			}
+			t.mu.Unlock()
 		}
 	}
 
@@ -85,57 +86,70 @@ func (t *AllocTable) Alloc(e Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	p := &ProcessInfo{
-		PID:  e.Pid,
-		Comm: e.Comm,
-		UID:  e.Uid,
+	key := AllocKey{
+		DeviceID: e.DeviceID,
+		Tid:      e.Tid,
+		Pid:      e.Pid,
+		Comm:     e.Comm,
+		Uid:      e.Uid,
 	}
-	th := &ThreadInfo{P: p, TID: e.Tid}
-	s := &StackInfo{T: th, SID: e.StackID}
 
-	key := AllocKey{DeviceID: e.DeivceID, Tid: e.Tid, Pid: e.Pid, Dptr: e.Dptr, Uid: e.Uid}
+	entry, ok := t.data[key]
+	if !ok {
+		entry = &AllocEntry{}
+		t.data[key] = entry
+		// update index
+		h := pidTgid(key.Pid, key.Tid)
+		if _, ok := t.index[h]; !ok {
+			t.index[h] = make(map[AllocKey]struct{})
+		}
+		t.index[h][key] = struct{}{}
+	}
 
-	t.data[key] = &AllocEntry{
-		Size:      AllocSize(e.Size),
-		Timestamp: e.TsNs,
-		Stack:     s,
-	}
-	// Insert to index
-	h := pidTgid(key.Pid, key.Tid)
-	if _, ok := t.index[h]; !ok {
-		t.index[h] = make(map[AllocKey]struct{})
-	}
-	t.index[h][key] = struct{}{}
+	// accumulate size
+	entry.Size = AllocSize(e.Size)
+	entry.TotalSize += AllocSize(e.Size)
+	entry.LastTs = e.TsNs
 }
 
 func (t *AllocTable) Free(e Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	key := AllocKey{DeviceID: e.DeivceID, Tid: e.Tid, Pid: e.Pid, Dptr: Dptr(e.Dptr)}
-	delete(t.data, key)
-}
-
-func (t *AllocTable) Aggregate() map[Pid]Result {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	df := &DF{}
-	df.InitHeader([]Header{"TS", "DEVICEID", "PID", "UID", "COMM", "DPTR", "TID", "SID", "TOTAL"})
-	for key, entry := range t.data {
-		df.Insert(Row{
-			Timestamp: entry.Timestamp,
-			DeviceID:  key.DeviceID,
-			Pid:       key.Pid,
-			Uid:       key.Uid,
-			Comm:      entry.Stack.T.P.Comm,
-			Dptr:      key.Dptr,
-			Tid:       key.Tid,
-			Sid:       entry.Stack.SID,
-			Size:      entry.Size,
-		})
+	key := AllocKey{
+		DeviceID: e.DeviceID,
+		Tid:      e.Tid,
+		Pid:      e.Pid,
+		Comm:     e.Comm,
+		Uid:      e.Uid,
 	}
-	return df.GroupAlloc()
+
+	entry, ok := t.data[key]
+	if !ok {
+		// no existing record for this key, ignore
+		return
+	}
+
+	// decrement safely
+	if entry.TotalSize >= AllocSize(e.Size) {
+		entry.TotalSize -= AllocSize(e.Size)
+	} else {
+		entry.TotalSize = 0
+	}
+
+	entry.LastTs = e.TsNs
+
+	// if everything is zero, remove entry
+	if entry.TotalSize == 0 {
+		delete(t.data, key)
+		h := pidTgid(key.Pid, key.Tid)
+		if idx, ok := t.index[h]; ok {
+			delete(idx, key)
+			if len(idx) == 0 {
+				delete(t.index, h)
+			}
+		}
+	}
 }
 
 func (t *AllocTable) Print(ctx context.Context) {
@@ -148,13 +162,11 @@ func (t *AllocTable) Print(ctx context.Context) {
 			slog.Debug("Stopping Print action...")
 			return
 		case <-ticker.C:
-			fmt.Println(strings.Repeat("-", 20), time.Now().Format(time.RFC3339), strings.Repeat("-", 20))
 			r := t.Aggregate()
 			if len(r) == 0 {
-				fmt.Println("NO EVENT.")
 				continue
 			}
-			PrintResults(r)
+			PrintResults(r, 5, 5)
 		}
 	}
 }

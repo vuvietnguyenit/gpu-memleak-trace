@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -42,4 +44,28 @@ func initOffset() {
 func KtimeToTime(tsNs Timestamp) time.Time {
 	offsetOnce.Do(initOffset)
 	return time.Unix(0, int64(tsNs)+monoToRealOffset)
+}
+
+func pidExists(pid int) bool {
+	_, err := os.Stat("/proc/" + strconv.Itoa(pid))
+	return err == nil
+}
+
+func getLivePIDs() (map[Pid]struct{}, error) {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil, err
+	}
+
+	live := make(map[Pid]struct{}, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(e.Name())
+		if err == nil {
+			live[Pid(pid)] = struct{}{}
+		}
+	}
+	return live, nil
 }

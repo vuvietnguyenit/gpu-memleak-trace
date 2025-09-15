@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 const (
 	EVENT_MALLOC EventType = 0
@@ -11,13 +14,18 @@ type EventType int32
 type Dptr uint64
 type AllocSize uint64
 type Pid uint32
-type DeivceID int32 // If will return -1 if can't get device ID
+type DeviceID int32 // If will return -1 if can't get device ID
 type Uid uint32     // For example: 0 = root
-type StackID uint32
+// type StackID uint32
 type Comm [16]byte
 type Tid uint32
 type Retval int32
 type Timestamp uint64
+
+func (t Timestamp) HumanTime() time.Time {
+	offsetOnce.Do(initOffset)
+	return time.Unix(0, int64(t)+monoToRealOffset)
+}
 
 // Human-readable format for size
 func (s AllocSize) HumanSize() string {
