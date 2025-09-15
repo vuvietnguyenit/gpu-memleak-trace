@@ -8,6 +8,9 @@ This tool helps diagnose GPU-related issues by tracing memory allocations and de
 - Multi-GPU aware: Traces allocations across all GPUs on a node, not just a single device, making it suitable for modern multi-GPU servers.
 - Real-time leak detection with process context.
 
+## Performance testing
+See: [performance result](docs/performance.md)
+
 ## Build
 ```shell
 root@gpu1 ~/gpu-memleak-trace (main)# make build 
