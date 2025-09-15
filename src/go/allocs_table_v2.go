@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 )
 
 type TableKey struct {
 	DeviceID DeviceID
+	Dptr     Dptr
 	Uid      Uid
 	Pid      Pid
 	Comm     Comm
@@ -45,15 +47,7 @@ func (ar *AllocateResult) Add(key TableKey, size AllocSize, ts Timestamp) {
 func (ar *AllocateResult) Sub(key TableKey, size AllocSize, ts Timestamp) {
 	ar.mu.Lock()
 	defer ar.mu.Unlock()
-	if current, ok := ar.data[key]; ok {
-		if current.TotalSize <= size {
-			delete(ar.data, key)
-		} else {
-			current.TotalSize -= size
-			current.LastTs = ts
-			ar.data[key] = current
-		}
-	}
+	delete(ar.data, key)
 }
 
 // Get returns the alloc data for a key
@@ -63,22 +57,57 @@ func (ar *AllocateResult) Get(key TableKey) AllocData {
 	return ar.data[key]
 }
 
-// Delete removes a key entirely
-func (ar *AllocateResult) Delete(key TableKey) {
-	ar.mu.Lock()
-	defer ar.mu.Unlock()
-	delete(ar.data, key)
+type SummaryRow struct {
+	DeviceID  DeviceID
+	Uid       Uid
+	Pid       Pid
+	Tid       Tid
+	Comm      Comm
+	TotalSize AllocSize
+	LastTs    Timestamp
 }
 
-// Summary returns a copy of the current state
-func (ar *AllocateResult) Summary() map[TableKey]AllocData {
+func (ar *AllocateResult) Summary() []SummaryRow {
 	ar.mu.RLock()
 	defer ar.mu.RUnlock()
-	snapshot := make(map[TableKey]AllocData, len(ar.data))
-	for k, v := range ar.data {
-		snapshot[k] = v
+
+	grouped := make(map[string]*SummaryRow)
+
+	for key, val := range ar.data {
+		// Create composite key (string) to group by DeviceID, Uid, Pid, Tid, Comm
+		gk := fmt.Sprintf("%d:%d:%d:%d:%s",
+			key.DeviceID, key.Uid, key.Pid, key.Tid, key.Comm)
+
+		if row, ok := grouped[gk]; ok {
+			row.TotalSize += val.TotalSize
+			if val.LastTs > row.LastTs {
+				row.LastTs = val.LastTs
+			}
+		} else {
+			grouped[gk] = &SummaryRow{
+				DeviceID:  key.DeviceID,
+				Uid:       key.Uid,
+				Pid:       key.Pid,
+				Tid:       key.Tid,
+				Comm:      key.Comm,
+				TotalSize: val.TotalSize,
+				LastTs:    val.LastTs,
+			}
+		}
 	}
-	return snapshot
+
+	// Convert to slice
+	result := make([]SummaryRow, 0, len(grouped))
+	for _, row := range grouped {
+		result = append(result, *row)
+	}
+
+	// Sort (descending by TotalSize)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].TotalSize > result[j].TotalSize
+	})
+
+	return result
 }
 
 type AllocateTable struct {
@@ -123,14 +152,13 @@ func (t *AllocateTable) Print() {
 	fmt.Printf("--- Scan Time: %s ---\n\n", time.Now().Format("2006-01-02 15:04:05"))
 	// print summaries
 	summary := t.allocRes.Summary()
-	for k, data := range summary {
+	for _, row := range summary {
 		fmt.Printf("PID=%d TID=%d UID=%d DEV=%d Comm=%s -> TotalSize=%s LastTs=%s\n",
-			k.Pid, k.Tid, k.Uid, k.DeviceID, k.Comm[:],
-			data.TotalSize.HumanSize(), data.LastTs.HumanTime().Format("2006-01-02 15:04:05.000000000"))
+			row.Pid, row.Tid, row.Uid, row.DeviceID, row.Comm[:],
+			row.TotalSize.HumanSize(), row.LastTs.HumanTime().Format("2006-01-02 15:04:05.000000000"))
 	}
 
 	// optionally print heaps (top-N allocations per TID)
-
 	for tid := range t.tEvents.data {
 		fmt.Printf("Top allocations for TID=%d:\n", tid)
 		evs := t.tEvents.GetTopN(tid)
@@ -145,7 +173,7 @@ func (t *AllocateTable) Malloc(ev Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	key := TableKey{ev.DeviceID, ev.Uid, ev.Pid, ev.Comm, ev.Tid}
+	key := TableKey{ev.DeviceID, ev.Dptr, ev.Uid, ev.Pid, ev.Comm, ev.Tid}
 
 	// update AllocateRes
 	t.allocRes.Add(key, ev.Size, ev.TsNs)
@@ -158,7 +186,7 @@ func (t *AllocateTable) Free(ev Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	key := TableKey{ev.DeviceID, ev.Uid, ev.Pid, ev.Comm, ev.Tid}
+	key := TableKey{ev.DeviceID, ev.Dptr, ev.Uid, ev.Pid, ev.Comm, ev.Tid}
 
 	// update summary
 	t.allocRes.Sub(key, ev.Size, ev.TsNs)
@@ -187,66 +215,30 @@ func (t *AllocateTable) cleanupOnce() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	livePIDs, err := getLivePIDs()
+	if err != nil {
+		slog.Warn("failed to read /proc", "err", err)
+		return
+	}
+
 	// check each key in allocRes
 	for key := range t.allocRes.data {
-		if !pidExists(int(key.Pid)) {
-			// stale PID -> remove
+		if _, ok := livePIDs[key.Pid]; !ok {
 			delete(t.allocRes.data, key)
-
-			// also remove its heap (TID related)
 			delete(t.tEvents.data, key.Tid)
 		}
 	}
 
-	// also scan heaps for TIDs not linked to any live PID
+	// Build a set of TIDs still alive in allocRes
+	liveTids := make(map[Tid]struct{})
+	for key := range t.allocRes.data {
+		liveTids[key.Tid] = struct{}{}
+	}
+
+	// Remove stale TIDs
 	for tid := range t.tEvents.data {
-		// if no PID maps to this tid, drop it
-		found := false
-		for key := range t.allocRes.data {
-			if key.Tid == tid {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if _, ok := liveTids[tid]; !ok {
 			delete(t.tEvents.data, tid)
 		}
 	}
-}
-
-type LookupRecord struct {
-	Key  TableKey
-	Data AllocData
-	Dptr *Dptr // optional, nil if no pointer
-}
-
-// Lookup returns either all or filtered records
-func (t *AllocateTable) Lookup(key TableKey) []LookupRecord {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	records := []LookupRecord{}
-
-	summary := t.allocRes.Summary()
-
-	for k, data := range summary {
-		if (key == TableKey{}) || (k == key) {
-			rec := LookupRecord{Key: k, Data: data}
-
-			// Try to find matching Dptr from heap
-			if h, ok := t.tEvents.data[k.Tid]; ok {
-				for _, te := range *h {
-					if te.Size == data.TotalSize {
-						d := te.Dptr
-						rec.Dptr = &d
-						break
-					}
-				}
-			}
-
-			records = append(records, rec)
-		}
-	}
-
-	return records
 }

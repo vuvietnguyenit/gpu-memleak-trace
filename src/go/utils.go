@@ -50,3 +50,22 @@ func pidExists(pid int) bool {
 	_, err := os.Stat("/proc/" + strconv.Itoa(pid))
 	return err == nil
 }
+
+func getLivePIDs() (map[Pid]struct{}, error) {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil, err
+	}
+
+	live := make(map[Pid]struct{}, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(e.Name())
+		if err == nil {
+			live[Pid(pid)] = struct{}{}
+		}
+	}
+	return live, nil
+}
