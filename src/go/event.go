@@ -18,7 +18,7 @@ func (e EventType) String() string {
 type Event struct {
 	Pid       Pid
 	Tid       Tid
-	DeivceID  DeivceID
+	DeviceID  DeviceID
 	Uid       Uid
 	Size      AllocSize
 	Dptr      Dptr
