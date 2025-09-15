@@ -93,6 +93,36 @@ to handle the data.
 
 Trace result:
 
+``` python
+!../bin/gpu-memleak-trace --trace-print
+```
+
+    time=2025-09-15T21:47:32.441+07:00 level=INFO msg="eBPF program running... Press Ctrl+C to exit."
+    time=2025-09-15T21:47:32.441+07:00 level=INFO msg="Running in DEBUG mode: ignoring --trace-print and --export-metrics"
+    --- Scan Time: 2025-09-15 21:47:38 ---
+
+    PID=1377235 TID=1377235 UID=0 DEV=0 Comm=python -> TotalSize=9.25 MB LastTs=2025-09-15 21:47:38.441759091
+    Top allocations for TID=1377235:
+      Size=2.00 KB, Ptr=0x00007eb5c3000000
+      Size=2.00 KB, Ptr=0x00007eb5c3000800
+      Size=2.00 KB, Ptr=0x00007eb5c3001000
+      Size=2.00 KB, Ptr=0x00007eb5c3001800
+      Size=2.00 KB, Ptr=0x00007eb5c3002000
+
+    --- Scan Time: 2025-09-15 21:47:40 ---
+
+    PID=1377235 TID=1377235 UID=0 DEV=0 Comm=python -> TotalSize=17.75 MB LastTs=2025-09-15 21:47:39.906348818
+    Top allocations for TID=1377235:
+      Size=2.00 KB, Ptr=0x00007eb5c3000000
+      Size=2.00 KB, Ptr=0x00007eb5c3000800
+      Size=2.00 KB, Ptr=0x00007eb5c3001000
+      Size=2.00 KB, Ptr=0x00007eb5c3001800
+      Size=2.00 KB, Ptr=0x00007eb5c3002000
+
+    time=2025-09-15T21:47:45.883+07:00 level=INFO msg="Shutting down gracefully..."
+    time=2025-09-15T21:47:45.890+07:00 level=INFO msg="All goroutines stopped."
+    ^C
+
 ## Run monitor
 
 Monitor CPU, Memory, DISK I/O by per PID and then export sample as CSV
