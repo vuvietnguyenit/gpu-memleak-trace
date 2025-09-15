@@ -1,8 +1,11 @@
 package main
 
 import (
-	"container/heap"
+	"context"
+	"fmt"
+	"log/slog"
 	"sync"
+	"time"
 )
 
 type TableKey struct {
@@ -11,11 +14,6 @@ type TableKey struct {
 	Pid      Pid
 	Comm     Comm
 	Tid      Tid
-}
-
-type TableEntry struct {
-	Size AllocSize // allocated size
-	Ts   Timestamp // last allocation timestamp
 }
 
 type AllocData struct {
@@ -85,45 +83,78 @@ func (ar *AllocateResult) Summary() map[TableKey]AllocData {
 
 type AllocateTable struct {
 	mu       sync.RWMutex
-	tEvents  map[Tid]*MinHeap // top-N allocations per Tid
+	tEvents  *TopAllocTracker // top-N allocations per Tid
 	allocRes *AllocateResult  // summary per Pid
 	topN     int              // max entries per Tid heap
 }
 
 func NewAllocTableV2(topN int) *AllocateTable {
 	return &AllocateTable{
-		tEvents:  make(map[Tid]*MinHeap),
+		tEvents:  NewTopAllocTracker(topN),
 		allocRes: NewAllocateResult(),
 		topN:     topN,
 	}
 }
 
-// Insert event
-func (t *AllocateTable) Insert(ev Event) {
+func (t *AllocateTable) StartPrinter(interval time.Duration, ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if len(t.allocRes.data) == 0 {
+					continue
+				}
+				t.Print()
+			case <-ctx.Done():
+				slog.Debug("Stopping Print action...")
+				return
+			}
+		}
+	}()
+}
+
+// Print shows the current state of AllocateTable
+func (t *AllocateTable) Print() {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	fmt.Printf("--- Scan Time: %s ---\n\n", time.Now().Format("2006-01-02 15:04:05"))
+	// print summaries
+	summary := t.allocRes.Summary()
+	for k, data := range summary {
+		fmt.Printf("PID=%d TID=%d UID=%d DEV=%d Comm=%s -> TotalSize=%s LastTs=%s\n",
+			k.Pid, k.Tid, k.Uid, k.DeviceID, k.Comm[:],
+			data.TotalSize.HumanSize(), data.LastTs.HumanTime().Format("2006-01-02 15:04:05.000000000"))
+	}
+
+	// optionally print heaps (top-N allocations per TID)
+
+	for tid := range t.tEvents.data {
+		fmt.Printf("Top allocations for TID=%d:\n", tid)
+		evs := t.tEvents.GetTopN(tid)
+		for _, e := range evs {
+			fmt.Printf("  Size=%s, Ptr=0x%016x\n", e.Size.HumanSize(), e.Dptr)
+		}
+	}
+	fmt.Println()
+}
+
+func (t *AllocateTable) Malloc(ev Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	key := TableKey{ev.DeviceID, ev.Uid, ev.Pid, ev.Comm, ev.Tid}
 
-	// update heap (top-N per Tid)
-	h, ok := t.tEvents[ev.Tid]
-	if !ok {
-		h = &MinHeap{}
-		heap.Init(h)
-		t.tEvents[ev.Tid] = h
-	}
-	if h.Len() < t.topN {
-		heap.Push(h, TEvent{Tid: ev.Tid, Size: ev.Size, Dptr: ev.Dptr})
-	} else if (*h)[0].Size < ev.Size {
-		heap.Pop(h)
-		heap.Push(h, TEvent{Tid: ev.Tid, Size: ev.Size, Dptr: ev.Dptr})
-	}
-
 	// update AllocateRes
 	t.allocRes.Add(key, ev.Size, ev.TsNs)
+	te := TEvent{Tid: ev.Tid, Size: ev.Size, Dptr: ev.Dptr}
+	// update top-N heap
+	t.tEvents.AddEvent(te)
 }
 
-func (t *AllocateTable) Delete(ev Event) {
+func (t *AllocateTable) Free(ev Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -132,16 +163,54 @@ func (t *AllocateTable) Delete(ev Event) {
 	// update summary
 	t.allocRes.Sub(key, ev.Size, ev.TsNs)
 
-	// remove from heap (linear scan rebuild)
-	if h, ok := t.tEvents[ev.Tid]; ok {
-		newHeap := &MinHeap{}
-		heap.Init(newHeap)
-		for _, e := range *h {
-			if e.Dptr != ev.Dptr {
-				heap.Push(newHeap, e)
+	te := TEvent{Tid: ev.Tid, Size: ev.Size, Dptr: ev.Dptr}
+	// remove from heap
+	t.tEvents.DelEvent(te)
+}
+
+func (t *AllocateTable) CleanupStale(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			t.cleanupOnce()
+		case <-ctx.Done():
+			slog.Debug("Stopping Cleanup action...")
+			return
+		}
+	}
+}
+
+func (t *AllocateTable) cleanupOnce() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// check each key in allocRes
+	for key := range t.allocRes.data {
+		if !pidExists(int(key.Pid)) {
+			// stale PID -> remove
+			delete(t.allocRes.data, key)
+
+			// also remove its heap (TID related)
+			delete(t.tEvents.data, key.Tid)
+		}
+	}
+
+	// also scan heaps for TIDs not linked to any live PID
+	for tid := range t.tEvents.data {
+		// if no PID maps to this tid, drop it
+		found := false
+		for key := range t.allocRes.data {
+			if key.Tid == tid {
+				found = true
+				break
 			}
 		}
-		t.tEvents[ev.Tid] = newHeap
+		if !found {
+			delete(t.tEvents.data, tid)
+		}
 	}
 }
 
@@ -165,7 +234,7 @@ func (t *AllocateTable) Lookup(key TableKey) []LookupRecord {
 			rec := LookupRecord{Key: k, Data: data}
 
 			// Try to find matching Dptr from heap
-			if h, ok := t.tEvents[k.Tid]; ok {
+			if h, ok := t.tEvents.data[k.Tid]; ok {
 				for _, te := range *h {
 					if te.Size == data.TotalSize {
 						d := te.Dptr

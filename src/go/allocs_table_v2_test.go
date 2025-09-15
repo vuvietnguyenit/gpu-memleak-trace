@@ -92,7 +92,7 @@ func TestAllocateTable_InsertAndLookup(t *testing.T) {
 
 	// Insert
 	ev := Event{DeviceID: key.DeviceID, Uid: key.Uid, Pid: key.Pid, Comm: key.Comm, Tid: key.Tid, Size: 256, Dptr: ptr, TsNs: ts}
-	at.Insert(ev)
+	at.Malloc(ev)
 
 	// Lookup all
 	records := at.Lookup(TableKey{})
@@ -118,10 +118,10 @@ func TestAllocateTable_Delete(t *testing.T) {
 	ts := Timestamp(time.Now().UnixNano())
 
 	ev := Event{DeviceID: key.DeviceID, Uid: key.Uid, Pid: key.Pid, Comm: key.Comm, Tid: key.Tid, Size: 128, Dptr: ptr, TsNs: ts}
-	at.Insert(ev)
+	at.Malloc(ev)
 
 	// Delete
-	at.Delete(ev)
+	at.Free(ev)
 
 	records := at.Lookup(key)
 	if len(records) != 0 {
@@ -144,7 +144,7 @@ func TestAllocateTable_Concurrency(t *testing.T) {
 				Comm: key.Comm, Tid: key.Tid,
 				Size: 64, Dptr: ptr, TsNs: ts + Timestamp(i),
 			}
-			at.Insert(ev)
+			at.Malloc(ev)
 			done <- struct{}{}
 		}(i)
 	}
@@ -194,9 +194,9 @@ func TestAllocateTable_ConcurrencyInsertDeleteCycle(t *testing.T) {
 					TsNs:     ts + Timestamp(g*iterations+i),
 				}
 				// Insert
-				at.Insert(ev)
+				at.Malloc(ev)
 				// Delete (simulate free right after alloc)
-				at.Delete(ev)
+				at.Free(ev)
 			}
 		}(g)
 	}

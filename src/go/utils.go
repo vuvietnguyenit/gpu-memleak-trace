@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -42,4 +44,9 @@ func initOffset() {
 func KtimeToTime(tsNs Timestamp) time.Time {
 	offsetOnce.Do(initOffset)
 	return time.Unix(0, int64(tsNs)+monoToRealOffset)
+}
+
+func pidExists(pid int) bool {
+	_, err := os.Stat("/proc/" + strconv.Itoa(pid))
+	return err == nil
 }

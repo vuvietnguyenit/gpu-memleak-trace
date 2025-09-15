@@ -121,18 +121,15 @@ func appRun() {
 	log.Println("eBPF program running... Press Ctrl+C to exit.")
 
 	var wg WG
-	allocsData := NewAllocTable()
+	allocsData := NewAllocTableV2(5)
 
 	if !FlagDebug {
 		// Debug mode: print events, no periodic metrics or exporters
 		slog.Info("Running in DEBUG mode: ignoring --trace-print and --export-metrics")
+		wg.Go(func() { allocsData.CleanupStale(ctx, 2*time.Second) })
 		if FlagTracePrint {
-			wg.Go(func() { allocsData.Print(ctx) })
+			wg.Go(func() { allocsData.StartPrinter(2*time.Second, ctx) })
 		}
-		if FlagExportMetrics {
-			wg.Go(func() { startPrometheusExporter(ctx) })
-		}
-		wg.Go(func() { allocsData.Cleanup(ctx) })
 	}
 	wg.Go(func() {
 		rb := RingBuffer{

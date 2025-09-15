@@ -56,6 +56,20 @@ func (t *TopAllocTracker) AddEvent(ev TEvent) {
 	}
 }
 
+func (t *TopAllocTracker) DelEvent(ev TEvent) {
+	// remove from heap (linear scan rebuild)
+	if h, ok := t.data[ev.Tid]; ok {
+		newHeap := &MinHeap{}
+		heap.Init(newHeap)
+		for _, e := range *h {
+			if e.Dptr != ev.Dptr {
+				heap.Push(newHeap, e)
+			}
+		}
+		t.data[ev.Tid] = newHeap
+	}
+}
+
 func (t *TopAllocTracker) GetTopN(tid Tid) []TEvent {
 	h, ok := t.data[tid]
 	if !ok {
