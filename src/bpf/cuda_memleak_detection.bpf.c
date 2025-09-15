@@ -239,9 +239,10 @@ int trace_malloc_return(struct pt_regs *ctx) {
   //            "dptr_addr=0x%llx",
   //            pid, dev, info->size, real_dptr);
   event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
-  if (!event)
+  if (!event) {
+    bpf_printk("dropped event (ringbuffer full)\n");
     goto cleanup;
-
+  }
   event->pid = pid;
   event->tid = tid;
   event->device = dev;
@@ -275,6 +276,7 @@ int trace_cuMemFree(struct pt_regs *ctx) {
 
   e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
   if (!e) {
+    bpf_printk("dropped event (ringbuffer full)\n");
     return 0;
   }
   e->pid = pid;
