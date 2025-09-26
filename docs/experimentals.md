@@ -15,227 +15,152 @@ The following environment was used for all experiments:
 - **GPU Driver Version**: 570.133.07
 
 ## Test malloc/free actions
+Basic case use pytorch lib to help simulate allocate operator
+Run experimental test: 
+
 ```shell
 (.venv) root@gpu1 ~/gpu-memleak-trace (main)# python script/train_simulator.py
 ```
-Result
+gpu-memleak-trace result:
 ```text
--------------------- 2025-08-25T15:45:33+07:00 --------------------
-PID: 2166793 / UID: 0
-  python:2166793
-    0x7d332a000000:gpu_0: 20.00 MB
-    0x7d332cc00000:gpu_0: 16.00 MB
-    0x7d332bc00000:gpu_0: 16.00 MB
-    0x7d331d400000:gpu_0: 8.00 MB
-    0x7d3343000000:gpu_0: 2.00 MB
-    0x7d331d200400:gpu_0: 128.00 KB
-    0x7d331d200000:gpu_0: 1.00 KB
-  pt_autograd_0:2167089
-    0x7d332b400000:gpu_0: 8.00 MB
-    0x7d331d220800:gpu_0: 128.00 KB
-    0x7d331d220400:gpu_0: 1.00 KB
-
-TOTAL LEAKED: 70.25 MB
--------------------- 2025-08-25T15:45:35+07:00 --------------------
-PID: 2166793 / UID: 0
-  python:2166793
-    0x7d332a000000:gpu_0: 20.00 MB
-    0x7d332bc00000:gpu_0: 16.00 MB
-    0x7d332cc00000:gpu_0: 16.00 MB
-    0x7d331d400000:gpu_0: 8.00 MB
-    0x7d3343000000:gpu_0: 2.00 MB
-    0x7d331d200400:gpu_0: 128.00 KB
-    0x7d331d200000:gpu_0: 1.00 KB
-  pt_autograd_0:2167089
-    0x7d332b400000:gpu_0: 8.00 MB
-    0x7d331d220800:gpu_0: 128.00 KB
-    0x7d331d220400:gpu_0: 1.00 KB
-
-TOTAL LEAKED: 70.25 MB
-
--------------------- 2025-08-25T15:45:37+07:00 --------------------
-PID: 2166793 / UID: 0
-  python:2166793
-    0x7d332a000000:gpu_0: 20.00 MB
-    0x7d332cc00000:gpu_0: 16.00 MB
-    0x7d331d400000:gpu_0: 8.00 MB
-    0x7d3343000000:gpu_0: 2.00 MB
-    0x7d331d200400:gpu_0: 128.00 KB
-    0x7d331d200000:gpu_0: 1.00 KB
-  pt_autograd_0:2167089
-    0x7d332b400000:gpu_0: 8.00 MB
-    0x7d331d220800:gpu_0: 128.00 KB
-    0x7d331d220400:gpu_0: 1.00 KB
-
-TOTAL LEAKED: 54.25 MB // Freed 16.00 MB at 0x7d332bc00000 (gpu 0) thread 2166793
+--- Scan Time: 2025-09-26 10:25:48 ---                                                                                               
+                                                                                                                                                                                                                                                                           
+PID=2821094 TID=2821094 UID=0 DEV=0 Comm=python -> TotalSize=30.13 MB LastTs=2025-09-26 10:25:48.356790850                                                                                                                                                                 
+Top allocations for TID=2821094:                                                                                                                                                                                                                                           
+  Size=20.00 MB, Ptr=0x0000738608000000                                                                                                                                                                                                                                    
+  Size=8.00 MB, Ptr=0x00007385fd400000                                                                                                                                                                                                                                     
+  Size=2.00 MB, Ptr=0x0000738621000000                                                                                                                                                                                                                                     
+  Size=128.00 KB, Ptr=0x00007385fd200400                                                                                                                                                                                                                                   
+  Size=1.00 KB, Ptr=0x00007385fd200000                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                           
+--- Scan Time: 2025-09-26 10:25:50 ---                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                           
+PID=2821094 TID=2821094 UID=0 DEV=0 Comm=python -> TotalSize=46.13 MB LastTs=2025-09-26 10:25:50.513837333                                                                                                                                                                 
+PID=2821094 TID=2821381 UID=0 DEV=0 Comm=pt_autograd_0 -> TotalSize=8.13 MB LastTs=2025-09-26 10:25:49.850939944 // we got more TID                                                                                                                                            
+Top allocations for TID=2821094:                                                                                                                                                                                                                                           
+  Size=20.00 MB, Ptr=0x0000738608000000                                                                                              
+  Size=16.00 MB, Ptr=0x0000738609c00000                                                                                                                                                                                                                                    
+  Size=8.00 MB, Ptr=0x00007385fd400000                                                                                                                                                                                                                                     
+  Size=2.00 MB, Ptr=0x0000738621000000                                                                                                                                                                                                                                     
+  Size=128.00 KB, Ptr=0x00007385fd200400                                                                                                                                                                                                                                   
+Top allocations for TID=2821381:                                                                                                                                                                                                                                           
+  Size=8.00 MB, Ptr=0x0000738609400000                                                                                                                                                                                                                                     
+  Size=128.00 KB, Ptr=0x00007385fd220800                                                                                                                                                                                                                                   
+  Size=1.00 KB, Ptr=0x00007385fd220400
 ```
 
 
 ## Test memory allocated by multi-process - each process has only one thread
+This test case will be generate 4 proccesses (one thread per proc), run in 120 seconds, size allocated generated in range [2, 10] MB, each allocate request will sleep in 25ms with 10% leak probaly
+Run experimental test: 
 ```shell
 (.venv) root@gpu1 ~/gpu-memleak-trace (main)# python scripts/gpu_mem_stressor.py --procs 4 --duration 120 --min-mb 2 --max-mb 10 --sleep-ms 25 --leak-prob 0.1 --compute 
 
 ```
-Result
+gpu-memleak-trace result:
+
 ```text
--------------------- 2025-08-25T14:24:06+07:00 --------------------
-NO EVENT.
--------------------- 2025-08-25T14:24:08+07:00 --------------------
-PID: 2082548 / UID: 0
-  python:2082548
-    0x725540400000:gpu_0: 20.00 MB
-    0x725522000000:gpu_0: 10.00 MB
-    0x72553b800000:gpu_0: 8.00 MB
-    0x72553b400000:gpu_0: 2.00 MB
-    0x72553b000000:gpu_0: 2.00 MB
-    0x72553b600400:gpu_0: 128.00 KB
-    0x72553b600000:gpu_0: 1.00 KB
-
-TOTAL LEAKED: 42.13 MB
-
-PID: 2082547 / UID: 0
-  python:2082547
-    0x74d3a4400000:gpu_0: 20.00 MB
-    0x74d386a00000:gpu_0: 20.00 MB
-    0x74d387e00000:gpu_0: 20.00 MB
-    0x74d386000000:gpu_0: 10.00 MB
-    0x74d39f800000:gpu_0: 8.00 MB
-    0x74d39f400000:gpu_0: 2.00 MB
-    0x74d39f000000:gpu_0: 2.00 MB
-    0x74d39f600400:gpu_0: 128.00 KB
-    0x74d39f600000:gpu_0: 1.00 KB
-
-TOTAL LEAKED: 82.13 MB
-
-PID: 2082550 / UID: 0
-  python:2082550
-    0x7083f0400000:gpu_0: 20.00 MB
-    0x7083d2000000:gpu_0: 20.00 MB
-    0x7083eb800000:gpu_0: 8.00 MB
-    0x7083eb000000:gpu_0: 2.00 MB
-    0x7083eb400000:gpu_0: 2.00 MB
-    0x7083eb600400:gpu_0: 128.00 KB
-    0x7083eb600000:gpu_0: 1.00 KB
-
-TOTAL LEAKED: 52.13 MB
-
-PID: 2082549 / UID: 0
-  python:2082549
-    0x7ab4faa00000:gpu_0: 20.00 MB
-    0x7ab518400000:gpu_0: 20.00 MB
-    0x7ab4fa000000:gpu_0: 10.00 MB
-    0x7ab513800000:gpu_0: 8.00 MB
-    0x7ab513400000:gpu_0: 2.00 MB
-    0x7ab513000000:gpu_0: 2.00 MB
-    0x7ab513600400:gpu_0: 128.00 KB
-    0x7ab513600000:gpu_0: 1.00 KB
-
-TOTAL LEAKED: 62.13 MB
+--- Scan Time: 2025-09-26 10:14:50 ---                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                           
+PID=2816887 TID=2816887 UID=0 DEV=0 Comm=python -> TotalSize=532.13 MB LastTs=2025-09-26 10:14:50.537371934                                                                                                                                                                
+PID=2816888 TID=2816888 UID=0 DEV=0 Comm=python -> TotalSize=492.13 MB LastTs=2025-09-26 10:14:50.537722275                                                                                                                                                                
+PID=2816889 TID=2816889 UID=0 DEV=0 Comm=python -> TotalSize=472.13 MB LastTs=2025-09-26 10:14:50.487077475                                                                                                                                                                
+PID=2816890 TID=2816890 UID=0 DEV=0 Comm=python -> TotalSize=452.13 MB LastTs=2025-09-26 10:14:49.626359419                                                                                                                                                                
+Top allocations for TID=2816888:                                                                                                                                                                                                                                           
+  Size=20.00 MB, Ptr=0x000075081dc00000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x000075081aa00000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x000075081c800000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x0000750838400000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x000075081f000000                                                                                                                                                                                                                                    
+Top allocations for TID=2816887:                                                                                                                                                                                                                                           
+  Size=20.00 MB, Ptr=0x0000797dfd200000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x0000797dfaa00000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x0000797dfbe00000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x0000797e18400000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x0000797dff000000                                                                                                                                                                                                                                    
+Top allocations for TID=2816890:                                                                                                                                                                                                                                           
+  Size=20.00 MB, Ptr=0x00006ffc05200000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x00006ffc03e00000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x00006ffc02000000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x00006ffc20400000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x00006ffc06600000                                                                                                                                                                                                                                    
+Top allocations for TID=2816889:                                                                                                                                                                                                                                           
+  Size=20.00 MB, Ptr=0x00007c7edd200000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x00007c7edaa00000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x00007c7edbe00000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x00007c7ef8400000                                                                                                                                                                                                                                    
+  Size=20.00 MB, Ptr=0x00007c7ede600000 
 ```
 
 ## Test malloc/free actions by multi-threading
+Run experimental test: 
 ```shell
 (.venv) root@gpu1 ~/gpu-memleak-trace (main)# python script/gpu_mem_threads_leak.py --device cuda:0 --threads 5 --duration 60 --max-tensor-mb 10 --alloc-prob 0.65 --stats-interval 1 --memory-cap-mb 4096
 ```
-Result:
+gpu-memleak-trace result:
 
 ```text
--------------------- 2025-08-25T16:16:27+07:00 --------------------
-PID: 2181102 / UID: 0
-  python:2181147
-    0x78c246000000:gpu_0: 20.00 MB
-    0x78c282400000:gpu_0: 20.00 MB
-  python:2181148
-    0x78c23e000000:gpu_0: 20.00 MB
-  python:2181150
-    0x78c252000000:gpu_0: 20.00 MB
-    0x78c247400000:gpu_0: 2.00 MB
-  python:2181151
-    0x78c23c000000:gpu_0: 20.00 MB
+--- Scan Time: 2025-09-26 10:31:54 ---
 
-TOTAL LEAKED: 102.00 MB
-
--------------------- 2025-08-25T16:16:29+07:00 --------------------
-PID: 2181102 / UID: 0
-  python:2181147
-    0x78c282400000:gpu_0: 20.00 MB
-    0x78c246000000:gpu_0: 20.00 MB
-  python:2181148
-    0x78c23e000000:gpu_0: 20.00 MB
-  python:2181149
-    0x78c23a000000:gpu_0: 20.00 MB
-  python:2181150
-    0x78c252000000:gpu_0: 20.00 MB
-    0x78c238000000:gpu_0: 20.00 MB
-    0x78c247400000:gpu_0: 2.00 MB
-  python:2181151
-    0x78c23c000000:gpu_0: 20.00 MB
-
-TOTAL LEAKED: 142.00 MB
+PID=2823326 TID=2823368 UID=0 DEV=0 Comm=python -> TotalSize=100.00 MB LastTs=2025-09-26 10:31:45.154295469
+PID=2823326 TID=2823370 UID=0 DEV=0 Comm=python -> TotalSize=62.00 MB LastTs=2025-09-26 10:31:52.568443898
+PID=2823326 TID=2823371 UID=0 DEV=0 Comm=python -> TotalSize=20.00 MB LastTs=2025-09-26 10:31:04.762561961
+PID=2823326 TID=2823369 UID=0 DEV=0 Comm=python -> TotalSize=20.00 MB LastTs=2025-09-26 10:31:28.925112202
+Top allocations for TID=2823368:
+  Size=20.00 MB, Ptr=0x0000715b0c400000
+  Size=20.00 MB, Ptr=0x0000715ad2000000
+  Size=20.00 MB, Ptr=0x0000715aca000000
+  Size=20.00 MB, Ptr=0x0000715ac6000000
+  Size=20.00 MB, Ptr=0x0000715ac0000000
+Top allocations for TID=2823370:
+  Size=20.00 MB, Ptr=0x0000715ade000000
+  Size=20.00 MB, Ptr=0x0000715ac4000000
+  Size=20.00 MB, Ptr=0x0000715abe000000
+  Size=2.00 MB, Ptr=0x0000715ad3400000
+Top allocations for TID=2823371:
+  Size=20.00 MB, Ptr=0x0000715ac8000000
+Top allocations for TID=2823369:
+  Size=20.00 MB, Ptr=0x0000715ac2000000
 ```
 
 
 ## Test anomaly allocation
 This experiment simulates an anomaly allocation by running a process with multiple threads and specifying one thread as the anomaly thread. That thread will generate an anomalous allocation. The anomaly allocation has a very large size, and we can observe it when running a trace tool.
-
+The script and arguments above, each normal allocation is 10 MB. However, one thread produces the anomaly allocation. This anomaly appears in thread T0 at iteration 5, with a size of 2096 MB.
 ```shell
 (.venv) root@gpu1 ~/gpu-memleak-trace (main)# python script/gpu_alloc_anomaly.py --device cuda:0 --threads 4 --iterations 20 --normal-mb 10 --anomaly-mb 2096 --anomaly-thread 0 --anomaly-iter 5
 ```
-The script and arguments above, each normal allocation is 10 MB. However, one thread produces the anomaly allocation. This anomaly appears in thread T0 at iteration 5, with a size of 2096 MB.
-
-*Result*
-```
-Using device: cuda:0 (NVIDIA GeForce RTX 5090)
-...
-[MAIN after starting batch 3] allocated=120.00 MB, reserved=160.00 MB, peak=160.00 MB
-[T1 iter 4 (normal 10.0 MB)] allocated=140.00 MB, reserved=160.00 MB, peak=160.00 MB
-[T0 iter 4 (normal 10.0 MB)] allocated=130.00 MB, reserved=160.00 MB, peak=160.00 MB
-[T2 iter 4 (normal 10.0 MB)] allocated=130.00 MB, reserved=160.00 MB, peak=160.00 MB
-[T3 iter 4 (normal 10.0 MB)] allocated=120.00 MB, reserved=160.00 MB, peak=160.00 MB
-[MAIN after starting batch 4] allocated=120.00 MB, reserved=160.00 MB, peak=160.00 MB
-[T2 iter 5 (normal 10.0 MB)] allocated=140.00 MB, reserved=162.00 MB, peak=160.00 MB
-[T1 iter 5 (normal 10.0 MB)] allocated=130.00 MB, reserved=162.00 MB, peak=160.00 MB
-[T3 iter 5 (normal 10.0 MB)] allocated=120.00 MB, reserved=162.00 MB, peak=160.00 MB
-[MAIN after starting batch 5] allocated=120.00 MB, reserved=162.00 MB, peak=160.00 MB
-[T0 iter 5 (ANOMALY 2096.0 MB)] allocated=2.15 GB, reserved=2.21 GB, peak=2.16 GB // !!!
-[T3 iter 6 (normal 10.0 MB)] allocated=2.18 GB, reserved=2.21 GB, peak=2.19 GB
-[T0 iter 6 (normal 10.0 MB)] allocated=2.17 GB, reserved=2.21 GB, peak=2.19 GB
-[T1 iter 6 (normal 10.0 MB)] allocated=2.16 GB, reserved=2.21 GB, peak=2.19 GB[T2 iter 6 (normal 10.0 MB)] allocated=2.15 GB, reserved=2.21 GB, peak=2.19 GB
-...<truncated>
-[T3 iter 19 (normal 10.0 MB)] allocated=2.16 GB, reserved=2.21 GB, peak=2.20 GB
-[MAIN after starting batch 19] allocated=2.16 GB, reserved=2.21 GB, peak=2.20 GB
-Final CUDA memory stats:
-[FINAL] allocated=120.00 MB, reserved=2.21 GB, peak=2.20 GB
-```
-Trace result:
+gpu-memleak-trace result:
 
 ```text
--------------------- 2025-08-29T14:51:05+07:00 --------------------
-PID: 61666 / UID: 0
-  python:61735
-    0x7a7720000000:gpu_0: 2.05 GB // Anomally allocation is here
-    0x7a77d7600000:gpu_0: 10.00 MB
-    0x7a77dd000000:gpu_0: 10.00 MB
-    0x7a77f1000000:gpu_0: 10.00 MB
-    0x7a77d9400000:gpu_0: 10.00 MB
-    0x7a77d5c00000:gpu_0: 2.00 MB
-  python:61736
-    0x7a77dc600000:gpu_0: 10.00 MB
-    0x7a77d8000000:gpu_0: 10.00 MB
-    0x7a77d8a00000:gpu_0: 10.00 MB
-    0x7a77f6e00000:gpu_0: 10.00 MB
-  python:61737
-    0x7a77f6400000:gpu_0: 10.00 MB
-    0x7a77d6c00000:gpu_0: 10.00 MB
-    0x7a77d9e00000:gpu_0: 10.00 MB
-    0x7a77db200000:gpu_0: 10.00 MB
-  python:61738
-    0x7a77d5200000:gpu_0: 10.00 MB
-    0x7a77da800000:gpu_0: 10.00 MB
-    0x7a77d6000000:gpu_0: 10.00 MB
-    0x7a77dbc00000:gpu_0: 10.00 MB
+--- Scan Time: 2025-09-26 10:50:36 ---
 
-TOTAL LEAKED: 2.21 GB
+PID=2830725 TID=2830758 UID=0 DEV=0 Comm=python -> TotalSize=2.09 GB LastTs=2025-09-26 10:50:35.567509175
+PID=2830725 TID=2830759 UID=0 DEV=0 Comm=python -> TotalSize=40.00 MB LastTs=2025-09-26 10:50:35.462147309
+PID=2830725 TID=2830760 UID=0 DEV=0 Comm=python -> TotalSize=40.00 MB LastTs=2025-09-26 10:50:35.462600987
+PID=2830725 TID=2830761 UID=0 DEV=0 Comm=python -> TotalSize=40.00 MB LastTs=2025-09-26 10:50:35.462843205
+Top allocations for TID=2830761:
+  Size=10.00 MB, Ptr=0x000077c5a5000000
+  Size=10.00 MB, Ptr=0x000077c58ac00000
+  Size=10.00 MB, Ptr=0x000077c58de00000
+  Size=10.00 MB, Ptr=0x000077c591000000
+Top allocations for TID=2830759:
+  Size=10.00 MB, Ptr=0x000077c5aa400000
+  Size=10.00 MB, Ptr=0x000077c58b600000
+  Size=10.00 MB, Ptr=0x000077c58d400000
+  Size=10.00 MB, Ptr=0x000077c58f200000
+Top allocations for TID=2830760:
+  Size=10.00 MB, Ptr=0x000077c5aae00000
+  Size=10.00 MB, Ptr=0x000077c58c000000
+  Size=10.00 MB, Ptr=0x000077c58e800000
+  Size=10.00 MB, Ptr=0x000077c590600000
+Top allocations for TID=2830758:
+  Size=2.05 GB, Ptr=0x000077c4e4000000
+  Size=10.00 MB, Ptr=0x000077c58a000000
+  Size=10.00 MB, Ptr=0x000077c589200000
+  Size=10.00 MB, Ptr=0x000077c58ca00000
+  Size=10.00 MB, Ptr=0x000077c58fc00000
+
 ```
 
 
@@ -252,75 +177,36 @@ TOTAL LEAKED: 2.21 GB
 [memleak] Done. Total leaked ~ 8 GiB in 32 allocations.
 
 ```
-*Result*
+gpu-memleak-trace result:
 
 ```text
--------------------- 2025-08-31T11:26:44+07:00 --------------------
-PID: 978486 / UID: 0
-  python:978486
-    0x7e6ae6000000:gpu_0: 256.00 MB
-    0x7e6ad6000000:gpu_0: 256.00 MB
-
-TOTAL LEAKED: 512.00 MB
-
--------------------- 2025-08-31T11:26:46+07:00 --------------------
-PID: 978486 / UID: 0
-  python:978486
-    0x7e6ac6000000:gpu_0: 256.00 MB
-    0x7e6ab6000000:gpu_0: 256.00 MB
-    0x7e6ae6000000:gpu_0: 256.00 MB
-    0x7e6ad6000000:gpu_0: 256.00 MB
-
-TOTAL LEAKED: 1.00 GB
-
--------------------- 2025-08-31T11:26:48+07:00 --------------------
-PID: 978486 / UID: 0
-  python:978486
-    0x7e6ab6000000:gpu_0: 256.00 MB
-    0x7e6aa6000000:gpu_0: 256.00 MB
-    0x7e6a96000000:gpu_0: 256.00 MB
-    0x7e6ae6000000:gpu_0: 256.00 MB
-    0x7e6ad6000000:gpu_0: 256.00 MB
-    0x7e6ac6000000:gpu_0: 256.00 MB
-
-TOTAL LEAKED: 1.50 GB
-
-...<truncated>
--------------------- 2025-08-31T11:27:14+07:00 --------------------
-PID: 978486 / UID: 0
-  python:978486
-    0x7e6aa6000000:gpu_0: 256.00 MB
-    0x7e6ad6000000:gpu_0: 256.00 MB
-    0x7e6936000000:gpu_0: 256.00 MB
-    0x7e69a6000000:gpu_0: 256.00 MB
-    0x7e6a66000000:gpu_0: 256.00 MB
-    0x7e6a56000000:gpu_0: 256.00 MB
-    0x7e69d6000000:gpu_0: 256.00 MB
-    0x7e6ab6000000:gpu_0: 256.00 MB
-    0x7e6a36000000:gpu_0: 256.00 MB
-    0x7e6986000000:gpu_0: 256.00 MB
-    0x7e6ae6000000:gpu_0: 256.00 MB
-    0x7e6a96000000:gpu_0: 256.00 MB
-    0x7e6a76000000:gpu_0: 256.00 MB
-    0x7e69c6000000:gpu_0: 256.00 MB
-    0x7e69e6000000:gpu_0: 256.00 MB
-    0x7e69b6000000:gpu_0: 256.00 MB
-    0x7e6946000000:gpu_0: 256.00 MB
-    0x7e6926000000:gpu_0: 256.00 MB
-    0x7e6996000000:gpu_0: 256.00 MB
-    0x7e6966000000:gpu_0: 256.00 MB
-    0x7e68f6000000:gpu_0: 256.00 MB
-    0x7e6956000000:gpu_0: 256.00 MB
-    0x7e6a16000000:gpu_0: 256.00 MB
-    0x7e6916000000:gpu_0: 256.00 MB
-    0x7e6ac6000000:gpu_0: 256.00 MB
-    0x7e6a06000000:gpu_0: 256.00 MB
-    0x7e6a26000000:gpu_0: 256.00 MB
-    0x7e6a86000000:gpu_0: 256.00 MB
-    0x7e6976000000:gpu_0: 256.00 MB
-    0x7e6906000000:gpu_0: 256.00 MB
-    0x7e69f6000000:gpu_0: 256.00 MB
-    0x7e6a46000000:gpu_0: 256.00 MB
-
-TOTAL LEAKED: 8.00 GB
+--- Scan Time: 2025-09-26 10:52:30 ---                                                                                               
+                                                                  
+PID=2831498 TID=2831498 UID=0 DEV=0 Comm=python -> TotalSize=6.00 GB LastTs=2025-09-26 10:52:30.121510906                                                                                                                                                                  
+Top allocations for TID=2831498:                                  
+  Size=256.00 MB, Ptr=0x000070ff70000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff60000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff50000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff40000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff30000000                                                                                             
+                                                                  
+--- Scan Time: 2025-09-26 10:52:32 ---                                                                                               
+                                                                  
+PID=2831498 TID=2831498 UID=0 DEV=0 Comm=python -> TotalSize=6.50 GB LastTs=2025-09-26 10:52:32.125966389                                                                                                                                                                  
+Top allocations for TID=2831498:                                  
+  Size=256.00 MB, Ptr=0x000070ff70000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff60000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff50000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff40000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff30000000                                                                                             
+                                                                  
+--- Scan Time: 2025-09-26 10:52:34 ---                                                                                               
+                                                                  
+PID=2831498 TID=2831498 UID=0 DEV=0 Comm=python -> TotalSize=7.00 GB LastTs=2025-09-26 10:52:34.127126012                                                                                                                                                                  
+Top allocations for TID=2831498:                                  
+  Size=256.00 MB, Ptr=0x000070ff70000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff60000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff50000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff40000000                                                                                             
+  Size=256.00 MB, Ptr=0x000070ff30000000
 ```
